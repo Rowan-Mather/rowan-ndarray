@@ -154,5 +154,17 @@
         "type": "tarball",
         "url": "https://github.com/jaspervdj/stylish-haskell/archive/4ec5c509290d8c2b94045189a122d3fca5e45a4e.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "dense": {
+        "branch": "master",
+        "description": "dense Haskell library",
+        "homepage": "",
+        "owner": "cchalmers",
+        "repo": "dense",
+        "rev": "a84e7e43c7efca0ddfe1a5f60ee18cf006dc04fa",
+        "sha256": "1rg7s1ybdac6139j8l511x2f9jg5793wr20vph54j9p6ybybigsd",
+        "type": "tarball",
+        "url": "https://github.com/cchalmers/dense/archive/a84e7e43c7efca0ddfe1a5f60ee18cf006dc04fa.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
