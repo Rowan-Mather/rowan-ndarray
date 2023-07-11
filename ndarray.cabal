@@ -1,0 +1,23 @@
+cabal-version:      2.4
+name:               ndarray
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            MIT
+license-file:       LICENSE
+author:             Rowan Mather
+maintainer:         rowan@myrtle.ai
+-- copyright:
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+library
+    exposed-modules:  MyLib
+    -- other-modules:
+    -- other-extensions:
+    build-depends:    base >=4.13.0.0
+                    , dense
+    hs-source-dirs:   src
+    default-language: Haskell2010
+    ghc-options: -Wall

@@ -9,6 +9,7 @@ let ghc = haskellPackages.ghcWithPackages (pkgs: with pkgs; [
       QuickCheck
       ghcid
       repa
+      dense
     ]);
 in
 mkShell {
