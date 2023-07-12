@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+
 module DType where 
 
 import Prelude as P
@@ -85,15 +87,15 @@ instance DType Int where
   div = P.div
   power x d = fromIntegral x ** d
   pow x y = x ^ y
-  log x y = P.floor $ logBase (fromIntegral x) (fromIntegral y) :: Int
+  log x y = (P.floor (logBase ((fromIntegral x) :: Double) ((fromIntegral y) :: Double))) :: Int
   mod x y = fromIntegral (x `P.mod` y) :: Integer
   abs = P.abs
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ fromIntegral x) :: Int
-  cos x = (round $ P.cos $ fromIntegral x) :: Int
-  tan x = (round $ P.tan $ fromIntegral x) :: Int
+  sin x = (round $ P.sin $ iTf x) :: Int
+  cos x = (round $ P.cos $ iTf x) :: Int
+  tan x = (round $ P.tan $ iTf x) :: Int
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
@@ -107,6 +109,8 @@ instance DType Int where
   -- (Conversions)
   dtypeToInt x = x
 
+iTf = fromIntegral @Int @Float
+
 
 --instance DType Int64 where?
 
@@ -116,11 +120,11 @@ instance DType Float where
   subtract x y = x - y
   multiply x y = x * y
   divide x y = float2Double (x / y)
-  div x y = fromIntegral (P.floor x `P.div` P.floor y) :: Float
+  div x y = (fromIntegral (P.floor x `P.div` P.floor y)) :: Float
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = fromIntegral (P.floor x `P.mod` P.floor y) :: Integer
+  mod x y = (fromIntegral (P.floor x `P.mod` P.floor y)) :: Integer
   abs = P.abs
   ceil x = (fromIntegral $ P.ceiling x) :: Float 
   floor x = (fromIntegral $ P.floor x) :: Float
@@ -158,9 +162,9 @@ instance DType Bool where
   ceil x = x
   floor x = x
   -- Trig
-  sin x = toEnum (round $ P.sin $ fromIntegral $ fromEnum x) :: Bool
-  cos x = toEnum (round $ P.cos $ fromIntegral $ fromEnum x) :: Bool
-  tan x = toEnum (round $ P.tan $ fromIntegral $ fromEnum x) :: Bool
+  sin = boolEnumOp P.sin
+  cos = boolEnumOp P.cos
+  tan = boolEnumOp P.tan
   -- Logical 
   invert x = not x
   shiftleft _ = False
@@ -173,6 +177,9 @@ instance DType Bool where
   greater x y = x > y
   -- (Conversions)
   dtypeToInt x = (fromEnum x) :: Int
+
+boolEnumOp :: (RealFrac a1 , Num a2) => (a2 -> a1) -> Bool -> Bool
+boolEnumOp f x = 0 /= ((round $ f $ fromIntegral $ fromEnum x) :: Integer)
 
 --instance DType Char where?
 
