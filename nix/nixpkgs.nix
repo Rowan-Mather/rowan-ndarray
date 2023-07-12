@@ -6,9 +6,9 @@ let clash-compiler = import sources.clash-compiler {};
         niv = (import sources.niv {}).niv;
         haskellPackages = pkgs.haskellPackages.override {
           overrides = self: super: {
-            dense = pkgs.haskell.lib.markUnbroken (pkgs.haskell.lib.overrideSrc super.dense {
+            dense = pkgs.haskell.lib.markUnbroken (pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.overrideSrc super.dense {
               src = sources.dense;
-            });
+            }));
             yoda =
               pkgs.haskell.lib.doJailbreak
                 (self.callCabal2nix "yoda" sources.yoda {});
