@@ -14,4 +14,4 @@ let clash-compiler = import sources.clash-compiler {};
       };
 in
 import sources.nixpkgs
-  { overlays = [ overlay ] ; config = {}; }
+  { overlays = [ overlay ] ; config = { }; }
