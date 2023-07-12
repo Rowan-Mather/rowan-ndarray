@@ -27,8 +27,9 @@ instance Show NdArray where
 instance Num NdArray where
     (NdArray x) + (NdArray y) = case (eqTypeRep xtype ytype, matchDType (NdArray x) (NdArray y)) of
         (Just HRefl, _)     -> NdArray (V.zipWith add x y) -- Types match
-        (_, Just casted)    -> (NdArray x) + casted -- Second type can be converted to first
-        _                   -> error ("Cannot convert second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
+        -- Code to auto-cast types
+        --(_, Just casted)    -> (NdArray x) + casted -- Second type can be converted to first
+        _                   -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
         where
             xtype = ty x; ytype = ty y
 
