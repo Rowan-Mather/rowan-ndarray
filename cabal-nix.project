@@ -1,0 +1,5 @@
+-- To use this file, use `cabal <command> --project-file=cabal-nix.project`
+
+packages: .
+
+-- Nix should be providing dense, so no need for it here
