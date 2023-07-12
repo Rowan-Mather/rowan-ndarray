@@ -1,5 +1,7 @@
 module DType where 
 
+import Type.Reflection
+
 -- Basis for all pointwise operations
 class (Show a, Typeable a) => DType a where
   -- Numeric
@@ -39,7 +41,6 @@ class (Show a, Typeable a) => DType a where
 instance DType Int where
     add x y = x + y
     multiply x y = x * y
-    divide x y = 
     eq x y = x == y
 
 --instance DType Integer where?
