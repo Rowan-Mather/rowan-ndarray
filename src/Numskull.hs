@@ -3,10 +3,10 @@
 
 {-# LANGUAGE GADTs #-}
 
+
 module Numskull where
 
 import Prelude as P
---import Data.Maybe (isJust, fromJust)
 import Data.Dynamic
 import Type.Reflection
 import Data.Vector as V
@@ -23,19 +23,16 @@ data NdArray where
 instance Show NdArray where
     show (NdArray x) = show x 
 
--- To do: https://hackage.haskell.org/package/base-4.18.0.0/docs/GHC-Num.html
 instance Num NdArray where
     (NdArray x) + (NdArray y) = case (eqTypeRep xtype ytype, matchDType (NdArray x) (NdArray y)) of
         (Just HRefl, _)     -> NdArray (V.zipWith add x y) -- Types match
-        -- Code to auto-cast types
-        --(_, Just casted)    -> (NdArray x) + casted -- Second type can be converted to first
         _                   -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
         where
             xtype = ty x; ytype = ty y
 
-    --(NdArray x) - (NDArray y) = 
-    
+    --x - y = pointwiseZip DType.subtract x y 
     --(NdArray x) * (NDArray y)
+    -- To do: https://hackage.haskell.org/package/base-4.18.0.0/docs/GHC-Num.html
 
 
 -- Helper 
@@ -48,6 +45,35 @@ matchDType :: NdArray -> NdArray -> Maybe NdArray
 matchDType (NdArray x) (NdArray y) = case eqTypeRep (ty x) (ty (fromList [1::Int])) of
     Just HRefl  -> Just $ NdArray (V.map dtypeToInt y)
     _           -> Nothing
+
+-- Pointwise Operations not defined in Num
+
+{- Pointwise zip with type conversion (TODO)
+pointwiseZip (NdArray x) (NdArray y) = case (eqTypeRep xtype ytype, matchDType (NdArray x) (NdArray y)) of
+        (Just HRefl, _)     -> NdArray (V.zipWith add x y) -- Types match
+        -- Code to auto-cast types
+        --(_, Just casted)    -> (NdArray x) + casted -- Second type can be converted to first
+        _                   -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
+        where
+            xtype = ty x; ytype = ty y
+-}
+pointwiseZip zipfunc (NdArray x) (NdArray y) = case eqTypeRep xtype ytype of
+        Just HRefl -> NdArray (V.zipWith zipfunc x y) -- Types match
+        Nothing    -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
+        where
+            xtype = ty x; ytype = ty y
+
+elemMultiply x y = pointwiseZip multiply x y 
+
+
+
+
+
+
+
+
+
+
 
 
 ---- Testing
