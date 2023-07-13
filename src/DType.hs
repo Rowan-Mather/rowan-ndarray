@@ -19,6 +19,7 @@ class (Show a, Typeable a) => DType a where
   log :: a -> a -> a
   mod :: a -> a -> Integer
   abs :: a -> a
+  signum :: a -> a
   ceil :: a -> a
   floor :: a -> a
   -- Trig
@@ -90,6 +91,7 @@ instance DType Int where
   log x y = (P.floor (logBase ((fromIntegral x) :: Double) ((fromIntegral y) :: Double))) :: Int
   mod x y = fromIntegral (x `P.mod` y) :: Integer
   abs = P.abs
+  signum = P.signum
   ceil x = x
   floor x = x
   -- Trig
@@ -126,6 +128,7 @@ instance DType Float where
   log x y = logBase x y
   mod x y = (fromIntegral (P.floor x `P.mod` P.floor y)) :: Integer
   abs = P.abs
+  signum = P.signum
   ceil x = (fromIntegral $ P.ceiling x) :: Float 
   floor x = (fromIntegral $ P.floor x) :: Float
   -- Trig
@@ -159,6 +162,7 @@ instance DType Bool where
   log _x _y = undefined
   mod x y = fromIntegral (fromEnum x `P.mod` fromEnum y) :: Integer
   abs _ = True
+  signum = x
   ceil x = x
   floor x = x
   -- Trig
