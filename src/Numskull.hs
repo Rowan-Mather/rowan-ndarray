@@ -2,7 +2,8 @@
 -- :set -fdefer-type-errors
 
 {-# LANGUAGE GADTs #-}
-
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Numskull where
 
@@ -42,6 +43,7 @@ eqDType x y = case eqTypeRep (ty x) (ty y) of
     Just HRefl  -> True 
     _           -> False 
 
+-- case typeOf x `eqTypeRep` typeRep @Integer of NOTE THIS IS INT SYNTAX
 matchDType :: NdArray -> NdArray -> Maybe NdArray
 matchDType (NdArray x) (NdArray y) = case eqTypeRep (ty x) (ty (fromList [1::Int])) of
     Just HRefl  -> Just $ NdArray (V.map dtypeToInt y)
@@ -58,16 +60,15 @@ pointwiseZip (NdArray x) (NdArray y) = case (eqTypeRep xtype ytype, matchDType (
         where
             xtype = ty x; ytype = ty y
 -}
-{-
-pointwiseZip zipfunc (NdArray x) (NdArray y) = case eqTypeRep xtype ytype of
+
+pointwiseZip :: (forall t . DType t => t -> t -> t) -> NdArray -> NdArray -> NdArray
+pointwiseZip zipfunc (NdArray x) (NdArray y) = case eqTypeRep (ty x) (ty y) of
         Just HRefl -> NdArray (V.zipWith zipfunc x y) -- Types match
         Nothing    -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
         where
             xtype = ty x; ytype = ty y
 
-elemMultiply x y = pointwiseZip multiply x y 
-
--}
+elemMultiply x y = pointwiseZip multiply x y
 
 
 
