@@ -9,7 +9,8 @@ module Numskull where
 import Prelude as P
 import Data.Dynamic
 import Type.Reflection
-import Data.Vector as V
+---import Data.Vector as V
+import Data.Vector.Storable as V
 
 import DType
 
@@ -18,7 +19,7 @@ ty x = typeOf x -- Shorthand
 
 -- NdArray --
 data NdArray where
-  NdArray :: (Typeable a, DType a) => Vector a -> NdArray
+  NdArray :: (Typeable a, DType a, Storable a) => Vector a -> NdArray
 
 instance Show NdArray where
   show (NdArray x) = show x 
@@ -57,6 +58,7 @@ pointwiseZip (NdArray x) (NdArray y) = case (eqTypeRep xtype ytype, matchDType (
         where
             xtype = ty x; ytype = ty y
 -}
+{-
 pointwiseZip zipfunc (NdArray x) (NdArray y) = case eqTypeRep xtype ytype of
         Just HRefl -> NdArray (V.zipWith zipfunc x y) -- Types match
         Nothing    -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
@@ -65,7 +67,7 @@ pointwiseZip zipfunc (NdArray x) (NdArray y) = case eqTypeRep xtype ytype of
 
 elemMultiply x y = pointwiseZip multiply x y 
 
-
+-}
 
 
 
