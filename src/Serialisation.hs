@@ -52,5 +52,5 @@ loadNpy = undefined
 
 loadNpz = undefined
 
-main :: IO ()
-main = do saveNpy "./testout/idk.npy" (NdArray (fromList [1,2,3 :: Int]))
+testsave :: IO ()
+testsave = do saveNpy "./testout/idk.npy" (NdArray (fromList [1,2,3 :: Int]))
