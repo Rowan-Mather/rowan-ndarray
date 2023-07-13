@@ -21,7 +21,7 @@ data NdArray where
   NdArray :: (Typeable a, DType a) => Vector a -> NdArray
 
 instance Show NdArray where
-    show (NdArray x) = show x 
+  show (NdArray x) = show x 
 
 instance Num NdArray where
     (NdArray x) + (NdArray y) = case (eqTypeRep xtype ytype, matchDType (NdArray x) (NdArray y)) of
