@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Numskull where
 
@@ -15,83 +16,167 @@ import Type.Reflection
 ty :: Typeable a => a -> TypeRep a
 ty x = typeOf x
 
+(=@=) :: (Typeable a, Typeable b) => a -> b -> Maybe (a :~~: b)
+(=@=) v u = eqTypeRep (ty v) (ty u)
+
+-- Todo: Should shapes be [Integer] or [Int] or maybe even another vector?
 -- NdArray --
+-- The core of this module. NdArrays can be of any type (a) and size/shape (list of dimensions) but these are
+-- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
 data NdArray where
-  NdArray :: (Typeable a, DType a, Storable a) => Vector a -> NdArray
+  NdArray :: DType a => Vector a -> [Integer] -> NdArray
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
-  show (NdArray x) = show x 
+  show (NdArray v s) = show v <> show s
 
--- Todo: check shapes are also equal
 instance Eq NdArray where
-  (NdArray x) == (NdArray y) = x == y
-  (NdArray x) /= (NdArray y) = x /= y
+  (NdArray v s) == (NdArray u r) = (r == s) && 
+    case v =@= u of
+      Just HRefl -> v == u
+      Nothing    -> False
+  (NdArray v s) /= (NdArray u r) = (r /= s) || 
+    case v =@= u of
+      Just HRefl -> v /= u
+      Nothing    -> True
 
--- Todo: should we have some notion of LEQ for a smaller size vector?
 -- Investigate how Vector implements further
+-- Todo: check max and min work properly on all dtypes, probably use a map instead
 instance Ord NdArray where
-  compare (NdArray x) (NdArray y)   = compare x y
-  (<) (NdArray x) (NdArray y)       = x < y 
-  (<=) (NdArray x) (NdArray y)      = x <= y
-  (>) (NdArray x) (NdArray y)       = x > y
-  (>=) (NdArray x) (NdArray y)      = x >= y
-  max (NdArray x)                   = max x
-  min (NdArray x)                   = min x
+  (NdArray v s) `compare` (NdArray u r) = if s == r then case v =@= u of
+      Just HRefl -> compare v u
+      Nothing    -> error $ typeMismatch (show v) (show u)
+    else error $ shapeMismatch (show s) (show r)
+  
+  (NdArray v s) <= (NdArray u r) = if s == r then case v =@= u of
+      Just HRefl -> v <= u
+      Nothing    -> error $ typeMismatch (show v) (show u)
+    else error $ shapeMismatch (show s) (show r)
+  --  (>)     (NdArray v s) (NdArray u r) = u > v
+  --  (>=)    (NdArray v s) (NdArray u r) = u >= v
+  --  max     (NdArray v s)               = V.maximum v
+  --  min     (NdArray v s)               = V.minimum v
 
 -- To do: matrix multiplication :O
+-- To do: change fromInteger to return an integer array rather than int
 instance Num NdArray where
   (+) = pointwiseZip add
-  (-) = pointwiseZip subtract
+  (-) = pointwiseZip DType.subtract
   (*) = undefined -- Matrix multiplication
-  negate = invert
-  abs = abs
-  signum = signum
-  fromInteger x = NdArray (fromList [x])
+  negate (NdArray v s) = NdArray (V.map DType.invert v) s
+  abs (NdArray v s) = NdArray (V.map DType.abs v) s
+  signum (NdArray v s) = NdArray (V.map DType.signum v) s
+  fromInteger x = NdArray (fromList [(fromInteger x) :: Int]) [1]
+
+  
+-- Indexing
+-- Since vectors are 1D arrays but the matricicies can have n-dimensions, index conversion is neccessary
+-- The index i will be the 1D index
+-- Then x y z... for each dimension index
+-- i = x + y*xsize + z*xsize*ysize + ...
+-- x = i % xsize;   y = i/(xsize) % ysize;   z = i/(xsize*ysize) % zsize;   ...
+-- As described: https://softwareengineering.stackexchange.com/questions/212808/treating-a-1d-data-structure-as-2d-grid
+
+-- helper for collapseInd
+-- can this be folded? its over two things so i dont think so... only if i zip it
+collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
+collapseRun _ [] _ = 0
+collapseRun [] _ _ = 0
+collapseRun (s:ss) (x:xs) runSize = x*runSize + collapseRun ss xs (s*runSize)
+
+collapseInd :: [Integer] -> [Integer] -> Integer
+collapseInd shape indicies = collapseRun shape indicies 1
+
+-- helper for expandInd
+expandRun :: [Integer] -> Integer -> Integer -> [Integer]
+expandRun [] _ _ = []
+expandRun (s:ss) i runSize = x : expandRun ss i (s*runSize)
+  where x = (i `P.div` runSize) `P.mod` s
+
+expandInd :: [Integer] -> Integer -> [Integer]
+expandInd shape i = expandRun shape i 1
 
 -- Pointwise Functions
-  -- All the numpy-like functions not defined within the Eq, Ord or Num instances
-  
-  -- Single Argument
-  
-  -- To do ;)
+-- All the numpy-like functions not defined within the Eq, Ord or Num instances
+-- Single Argument
 
-  -- Two Arguments
-  pointwiseZip :: (forall t . DType t => t -> t -> t) -> NdArray -> NdArray -> NdArray
-  pointwiseZip zipfunc (NdArray x) (NdArray y) = 
-    case eqTypeRep (ty x) (ty y) of
-      Just HRefl -> NdArray (V.zipWith zipfunc x y) -- Types match
-      Nothing    -> error ("Cannot match second matrix of type '" P.++ show (ty y) P.++ "' to type '" P.++ show (ty x) P.++ "'.")
-  
-  elemMultiply :: NdArray -> NdArray -> NdArray
-  elemMultiply = pointwiseZip multiply
-  
-  elemDivide :: NdArray -> NdArray -> NdArray
-  elemDivide = pointwiseZip divide
-  
-  elemDiv :: NdArray -> NdArray -> NdArray
-  elemDiv = pointwiseZip div
-  
-  elemPower :: NdArray -> NdArray -> NdArray
-  elemPower = pointwiseZip power
-  
-  elemPow :: NdArray -> NdArray -> NdArray
-  elemPow = pointwiseZip pow
+-- To do ;)
+
+-- Two Arguments
+-- Fun things with forall http://hoogle.jeeves.myrtle/file/nix/store/3pyqd7gjlxwj7wfrcsr0w1rjvc0qyl8r-clash-extra-0.1.0.0-doc/share/doc/clash-extra-0.1.0.0/html/Data-SNat.html#v:reifySNat
+-- https://hackage.haskell.org/package/base-4.18.0.0/docs/Control-Monad-ST.html#v:runST
+pointwiseZip :: (forall t . DType t => t -> t -> t) -> NdArray -> NdArray -> NdArray
+pointwiseZip zipfunc (NdArray v s) (NdArray u r) = if s == r then 
+  case v =@= u of
+    Just HRefl -> NdArray (V.zipWith zipfunc v u) s -- Types match
+    Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
+  else error $ shapeMismatch (show s) (show r)
+
+elemMultiply :: NdArray -> NdArray -> NdArray
+elemMultiply = pointwiseZip multiply
+
+-- Todo: Needs to operate on doubles
+--elemDivide :: NdArray -> NdArray -> NdArray
+--elemDivide = pointwiseZip divide
+
+elemDiv :: NdArray -> NdArray -> NdArray
+elemDiv = pointwiseZip DType.div
+
+-- Todo: Needs to operate on doubles
+--elemPower :: NdArray -> NdArray -> NdArray
+--elemPower = pointwiseZip power
+
+elemPow :: NdArray -> NdArray -> NdArray
+elemPow = pointwiseZip pow
   
 -- Type & Shape Conversion
-  -- Converting between the standard dtypes and changing the shapes of matricies
+-- Converting between the standard dtypes and changing the shapes of matricies
+
+-- To do: add many more possible types you can convert to
+-- Use the TypeApplications syntax: 
+-- case typeOf x `eqTypeRep` typeRep @Integer of 
+matchDType :: NdArray -> NdArray -> Maybe NdArray
+matchDType (NdArray v _) (NdArray u r) = case v =@= fromList [1::Int] of
+  Just HRefl  -> Just $ NdArray (V.map dtypeToInt u) r
+  _           -> Nothing
+
+-- Check that the matrix isn't larger than the shape but if so truncate it
+constrainSize :: DType a => Vector a -> [Integer] -> (Bool, Vector a)
+constrainSize v s =
+  if size < len then (False, V.take size v)
+  else (True, v)
+  where 
+    size = fromInteger (P.product s) :: Int
+    len = V.length v
+
+-- Fill out any spaces in a vector smaller than the shape with 0s (or whatever the dtype 'identity' is)
+padZeros :: DType a => Vector a -> [Integer] -> Vector a
+padZeros v s = v V.++ V.replicate (size - len) identity
+  where 
+    size = fromInteger (P.product s) :: Int
+    len = V.length v
+
+-- Contrain or pad the vector to match the size
+setSize :: DType a => Vector a -> [Integer] -> Vector a
+setSize v s = let (unchanged, u) = constrainSize v s in
+  if unchanged then padZeros u s else u
+
+-- Constrain or pad the NdArray to match the new given size
+resize :: NdArray -> [Integer] -> NdArray
+resize (NdArray v _) r = NdArray (setSize v r) r
+
+--NB: reshape will pad/truncate individual dimensions whereas resize keeps as many values as possible but they might switch position
+-- a matrix being reshaped must already match the size correctly
+
+padDimension :: NdArray -> [Integer] -> NdArray
+padDimension = undefined
   
-  -- To do: add many more possible types you can convert to
-  -- Use the TypeApplications syntax: 
-  -- case typeOf x `eqTypeRep` typeRep @Integer of 
-  matchDType :: NdArray -> NdArray -> Maybe NdArray
-  matchDType (NdArray x) (NdArray y) = case eqTypeRep (ty x) (ty (fromList [1::Int])) of
-    Just HRefl  -> Just $ NdArray (V.map dtypeToInt y)
-    _           -> Nothing
+-- Common Errors 
+shapeMismatch :: String -> String -> String
+shapeMismatch s1 s2 = "Cannot match first array of shape '" <> s1 <> "' with array of shape '" <> s2 <> "'."
 
-
-
-
+typeMismatch :: String -> String -> String
+typeMismatch t1 t2 = "Cannot match first array of type '" <> t1 <> "' with array of type '" <> t2 <> "'."
 
 
 
@@ -100,16 +185,23 @@ instance Num NdArray where
 ---- Testing
 
 -- Helper trying to simplify the type checking....
+{-
 eqDType :: (Typeable a, Typeable b) => a -> b -> Bool
-eqDType x y = case eqTypeRep (ty x) (ty y) of 
-  Just HRefl  -> True 
-   _           -> False 
+eqDType x y = case eqTypeRep (typeOf x) (typeOf y) of 
+  Just HRefl  -> True
+  _           -> False
+
+idk = if eqDType nd1 nd2 then V.zipWith (\x y -> show x <> show y) v1 v2 else fromList [1]
+  where
+    (NdArray v1) = nd1
+    (NdArray v2) = nd2
+-}
 
 {- Pointwise zip with type conversion (TODO)
-pointwiseZip (NdArray x) (NdArray y) = case (eqTypeRep xtype ytype, matchDType (NdArray x) (NdArray y)) of
+pointwiseZip (NdArray v s) (NdArray u r) = case (eqTypeRep xtype ytype, matchDType (NdArray v s) (NdArray u r)) of
         (Just HRefl, _)     -> NdArray (V.zipWith add x y) -- Types match
         -- Code to auto-cast types
-        --(_, Just casted)    -> (NdArray x) + casted -- Second type can be converted to first
+        --(_, Just casted)    -> (NdArray v s) + casted -- Second type can be converted to first
         _                   -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
         where
             xtype = ty x; ytype = ty y
@@ -117,10 +209,12 @@ pointwiseZip (NdArray x) (NdArray y) = case (eqTypeRep xtype ytype, matchDType (
 
 {-
 unwrapND :: NdArray -> (String, Vector Dynamic)
-unwrapND (NdArray x) = case typeOf x of
+unwrapND (NdArray v s) = case typeOf x of
     vecTypeInt      -> ("Int", V.map toDyn x)
     vecTypeBool     -> ("Bool", V.map toDyn x)
 -}
 
-nd1 :: NdArray; nd2 :: NdArray
-nd1 = NdArray (fromList [1,2,3::Int]); nd2 = NdArray (fromList [10,11,12::Int])
+nd1 :: NdArray
+nd2 :: NdArray
+nd1 = NdArray (fromList [1,2,3::Int]) [3]
+nd2 = NdArray (fromList [10,11,12::Int]) [3]

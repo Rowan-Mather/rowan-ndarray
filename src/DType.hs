@@ -3,11 +3,13 @@
 module DType where 
 
 import Prelude as P
+import Data.Vector.Storable
 import Type.Reflection
 import GHC.Float (float2Double)
 
 -- Basis for all pointwise operations
-class (Show a, Typeable a) => DType a where
+class (Show a, Typeable a, Storable a, Eq a, Ord a) => DType a where
+  identity :: a 
   -- Numeric
   add :: a -> a -> a
   subtract :: a -> a -> a
@@ -30,12 +32,14 @@ class (Show a, Typeable a) => DType a where
   invert :: a -> a
   shiftleft :: a -> a
   shiftright :: a -> a
+  {-
   -- Comparative
   eq :: a -> a -> Bool
   leq :: a -> a -> Bool
   geq :: a -> a -> Bool
   less :: a -> a -> Bool
   greater :: a -> a -> Bool
+  -}
   -- Standard Conversions
   dtypeToInt :: a -> Int
   --dtypeToFloat :: a -> Float
@@ -80,6 +84,7 @@ instance DType TYPE where
 -}
 
 instance DType Int where 
+  identity = 0
   -- Numeric
   add x y = x + y 
   subtract x y = x - y
@@ -103,11 +108,13 @@ instance DType Int where
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
   -- Comparative
+  {-
   eq x y = x == y
   leq x y = x <= y
   geq x y = x >= y
   less x y = x < y
   greater x y = x > y
+  -}
   -- (Conversions)
   dtypeToInt x = x
 
@@ -117,6 +124,7 @@ iTf = fromIntegral @Int @Float
 --instance DType Int64 where?
 
 instance DType Float where 
+  identity = 0.0
   -- Numeric
   add x y = x + y 
   subtract x y = x - y
@@ -140,17 +148,20 @@ instance DType Float where
   shiftleft x = x * 2
   shiftright x = x / 2
   -- Comparative
+  {-
   eq x y = x == y
   leq x y = x <= y
   geq x y = x >= y
   less x y = x < y
   greater x y = x > y
+  -}
   -- (Conversions)
   dtypeToInt x = (P.floor x) :: Int
 
 --instance DType Double
 
 instance DType Bool where 
+  identity = False
     -- Numeric
   add x y = x || y
   subtract x y = toEnum (fromEnum x - fromEnum y)
@@ -162,9 +173,9 @@ instance DType Bool where
   log _x _y = undefined
   mod x y = fromIntegral (fromEnum x `P.mod` fromEnum y) :: Integer
   abs _ = True
-  signum = x
-  ceil x = x
-  floor x = x
+  signum = id
+  ceil = id
+  floor = id
   -- Trig
   sin = boolEnumOp P.sin
   cos = boolEnumOp P.cos
@@ -174,11 +185,13 @@ instance DType Bool where
   shiftleft _ = False
   shiftright _ = False
   -- Comparative
+  {-
   eq x y = x == y
   leq x y = x <= y
   geq x y = x >= y
   less x y = x < y
   greater x y = x > y
+  -}
   -- (Conversions)
   dtypeToInt x = (fromEnum x) :: Int
 
