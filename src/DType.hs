@@ -8,7 +8,7 @@ import Type.Reflection
 import GHC.Float (float2Double)
 
 -- Basis for all pointwise operations
-class (Show a, Typeable a, Storable a, Eq a, Ord a) => DType a where
+class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
   identity :: a 
   -- Numeric
   add :: a -> a -> a
@@ -32,14 +32,6 @@ class (Show a, Typeable a, Storable a, Eq a, Ord a) => DType a where
   invert :: a -> a
   shiftleft :: a -> a
   shiftright :: a -> a
-  {-
-  -- Comparative
-  eq :: a -> a -> Bool
-  leq :: a -> a -> Bool
-  geq :: a -> a -> Bool
-  less :: a -> a -> Bool
-  greater :: a -> a -> Bool
-  -}
   -- Standard Conversions
   dtypeToInt :: a -> Int
   --dtypeToFloat :: a -> Float
@@ -107,14 +99,6 @@ instance DType Int where
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
-  -- Comparative
-  {-
-  eq x y = x == y
-  leq x y = x <= y
-  geq x y = x >= y
-  less x y = x < y
-  greater x y = x > y
-  -}
   -- (Conversions)
   dtypeToInt x = x
 
@@ -147,14 +131,6 @@ instance DType Float where
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x / 2
-  -- Comparative
-  {-
-  eq x y = x == y
-  leq x y = x <= y
-  geq x y = x >= y
-  less x y = x < y
-  greater x y = x > y
-  -}
   -- (Conversions)
   dtypeToInt x = (P.floor x) :: Int
 
