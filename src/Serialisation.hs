@@ -14,6 +14,9 @@ import Foreign.Storable (poke, sizeOf)
 getNumpyDType :: NdArray -> String
 getNumpyDType _ = "<i8" --int64 explicitly for now
 
+-- I think you should just be able to reformat the list as a string 'tuple', but if you actually need
+-- to convert it first do this w/ template haskell
+-- https://stackoverflow.com/questions/2921345/how-do-i-convert-a-list-to-a-tuple-in-haskell
 -- tuple of ints
 getNumpyShape :: NdArray -> String
 getNumpyShape _ = "(3,)" --3x1 explicitly for now
