@@ -1,18 +1,15 @@
--- trust me bro ;) 
--- :set -fdefer-type-errors
-
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Numskull where
 
-import Prelude as P
-import Data.Dynamic
-import Type.Reflection
----import Data.Vector as V
-import Data.Vector.Storable as V
 import DType
+
+import Prelude as P
+import Data.Vector.Storable as V
+import Data.Dynamic -- Not needed?
+import Type.Reflection
 
 -- Typing shorthand
 ty :: Typeable a => a -> TypeRep a
