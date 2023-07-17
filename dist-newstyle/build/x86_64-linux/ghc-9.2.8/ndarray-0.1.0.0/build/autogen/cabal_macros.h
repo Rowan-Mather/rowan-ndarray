@@ -30,6 +30,16 @@
   (major1) == 0 && (major2) <  1 || \
   (major1) == 0 && (major2) == 1 && (minor) <= 0)
 #endif /* MIN_VERSION_dense */
+/* package split-0.2.3.5 */
+#ifndef VERSION_split
+#define VERSION_split "0.2.3.5"
+#endif /* VERSION_split */
+#ifndef MIN_VERSION_split
+#define MIN_VERSION_split(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  2 || \
+  (major1) == 0 && (major2) == 2 && (minor) <= 3)
+#endif /* MIN_VERSION_split */
 /* package vector-0.12.3.1 */
 #ifndef VERSION_vector
 #define VERSION_vector "0.12.3.1"
