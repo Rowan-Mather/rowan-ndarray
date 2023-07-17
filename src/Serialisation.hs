@@ -4,36 +4,49 @@ import Numskull
 import DType
 
 import System.IO
-import Data.Vector.Storable as S
+import qualified Data.Vector.Storable as S
 import Data.Word (Word16)
 import Data.List as List
 import Foreign (ForeignPtr, Ptr, alloca)
 import Foreign.Storable (poke, sizeOf)
 
+import Data.List.Split
+
 -- built in numpy serialisation descriptions
 getNumpyDType :: NdArray -> String
-getNumpyDType _ = "<i8" --int64 explicitly for now
-
--- I think you should just be able to reformat the list as a string 'tuple', but if you actually need
--- to convert it first do this w/ template haskell
--- https://stackoverflow.com/questions/2921345/how-do-i-convert-a-list-to-a-tuple-in-haskell
--- tuple of ints
+getNumpyDType (NdArray v _) = case show $ ty v of
+  "Vector Int"      -> "<i8"
+  "Vector Int32"    -> "<i4"
+  "Vector Integer"  -> "<i8"
+  "Vector Float"    -> "<f4"
+  "Vector Double"   -> "<f8"
+  "Vector Bool"     -> "<?"
+  "Vector Char"     -> "<U1"
+  _                 -> error "Non-standard types cannot be serialised. Yet."
+  
 getNumpyShape :: NdArray -> String
-getNumpyShape _ = "(3,)" --3x1 explicitly for now
+getNumpyShape (NdArray _ s) = "(" <> (take (length lshape -1) $ drop 1 $ lshape) <> ")"
+  where lshape = show s
 
+getElemSize :: NdArray -> Int
+getElemSize (NdArray v _) = S.maximum $ S.map sizeOf v
 
 -- Thanks Chris! https://github.com/cchalmers/dense/blob/6eced9f5a3ab6b5026fe4f7ab4f67a8bce4d6262/src/Data/Dense/Storable.hs#L686
 -- see https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html
 saveNpy :: FilePath -> NdArray -> IO ()
-saveNpy path (NdArray v) = withBinaryFile path WriteMode $ \h -> do
+saveNpy path (NdArray v s) = withBinaryFile path WriteMode $ \h -> do
   let
-    -- Unpack vector
-    nd = (NdArray v)
+    -- Unpacked specs
+    nd = (NdArray v s)
+    dtype = getNumpyDType nd
+    shape = getNumpyShape nd
+    vectorSize = (fromInteger $ product s) :: Int
+    elemSize = getElemSize nd
     -- Header string without length
     header = 
-      "{'descr': '"<>   getNumpyDType nd  <> "', " <>
-      "'fortran_order': False, "          <>
-      "'shape': "<>     getNumpyShape nd  <> " }"
+      "{'descr': '"<>   dtype   <> "', " <>
+      "'fortran_order': False, "<>
+      "'shape': "<>     shape   <> " }"
     -- Calculate header length (& padding)
     unpaddedLen = 6 + 2 + 2 + List.length header + 1
     paddedLen = ((unpaddedLen + 63) `Prelude.div` 64) * 64
@@ -47,13 +60,28 @@ saveNpy path (NdArray v) = withBinaryFile path WriteMode $ \h -> do
   hPutChar h '\n'
   -- Put vector body
   --unsafeWithPtr a $ \ptr -> hPutBuf h ptr (size nd * sizeOf (undefined :: (NumpyType a)=>a))
-  unsafeWith v (\ptr -> hPutBuf h ptr (3 * sizeOf (undefined :: Int)))
+  S.unsafeWith v (\ptr -> hPutBuf h ptr (vectorSize * elemSize))
 
-saveNpz = undefined
-
-loadNpy = undefined
+loadNpy :: FilePath -> IO ()
+loadNpy path = withBinaryFile path ReadMode $ \h -> do
+  descr <- hGetLine h
+  let 
+    attrs = splitOn ":" $ (splitOn "{" descr) !! 1
+    dtype = takeWhile (/='\'') $ drop 2 $ attrs !! 1
+    shapeStrs = splitOn "," $ takeWhile (/=')') $ drop 2 $ attrs !! 3
+    shape = map (\x -> read x :: Integer) $ take (length shapeStrs -1) shapeStrs
+    temp = sizeOf (undefined ::Int)
+  alloca $ \ptr -> do
+    buff <- hGetBuf h ptr temp
+    putStrLn $ show $ buff
+--  alloca $ \ptr -> poke ptr (fromIntegral headerLen :: Word16) >> hPutBuf h ptr 2
 
 loadNpz = undefined
 
+saveNpz = undefined
+
 testsave :: IO ()
-testsave = do saveNpy "./testout/idk.npy" (NdArray (fromList [1,2,3 :: Int]))
+testsave = do saveNpy "./testout/idk.npy" (NdArray (S.fromList [1,2,3 :: Int]) [3])
+
+testload :: IO ()
+testload = do loadNpy "./src/testout/idk.npy"
