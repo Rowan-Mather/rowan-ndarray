@@ -66,8 +66,17 @@ instance Num NdArray where
   negate (NdArray v s) = NdArray (V.map DType.invert v) s
   abs (NdArray v s) = NdArray (V.map DType.abs v) s
   signum (NdArray v s) = NdArray (V.map DType.signum v) s
-  fromInteger x = NdArray (fromList [(fromInteger x) :: Int]) [1]
+  fromInteger x = NdArray (singleton $ fromInteger @Int x) [1]
 
+-- | Creation | --
+-- Todo: get the ident of the dtype from an nd array
+indentityElem = undefined
+
+indentityElem' :: forall a . DType a => Vector a -> a
+indentityElem' _ = DType.identity :: DType a => a
+
+-- Todo: Create ident array of certain shape
+zeros = undefined 
   
 -- | Indexing & Slicing | -- 
 -- Since vectors are 1D arrays but the matricicies can have n-dimensions, index conversion is neccessary
@@ -130,7 +139,7 @@ elemDiv = pointwiseZip DType.div
 
 elemPow :: NdArray -> NdArray -> NdArray
 elemPow = pointwiseZip pow
-  
+
 -- | Type & Shape Conversion | --
 -- Converting between the standard dtypes and changing the shapes of matricies
 
@@ -167,16 +176,46 @@ setSize v s = let (unchanged, u) = constrainSize v s in
 resize :: NdArray -> [Integer] -> NdArray
 resize (NdArray v _) r = NdArray (setSize v r) r
 
+reshape :: NdArray -> [Integer] -> Maybe NdArray
+reshape (NdArray v s) r = if P.product s == P.product r
+  then Just $ NdArray v r
+  else Nothing
+
 --NB: reshape will pad/truncate individual dimensions whereas resize keeps as many values as possible but they might switch position
 -- a matrix being reshaped must already match the size correctly
-
+map1DIndex :: [Integer] -> [Integer] -> Integer -> Integer
 map1DIndex s r i = collapseInd r (expandInd s i)
 
 -- ok then what im gonna do is make an array of all the mapping and value pairs and // it
 
+mapShapeLoss :: [Integer] -> [Integer] -> Bool
+mapShapeLoss s r = 
+  if P.length r < P.length s then True
+  else P.or $ P.zipWith (>) s r
+
+{-
+hack :: forall a . DType a => a -> a
+hack _ = (DType.identity :: DType a => a)
+
+vectorHack :: forall a . DType a => Vector a -> Vector a
+vectorHack _ = singleton (DType.identity :: DType a => a)
+
+vectorHack' :: forall a . DType a => Vector a -> a
+vectorHack' _ = DType.identity :: DType a => a
+-}
+
+-- If you try to map to a smaller shape, values are dropped & weird stuff happens, otherwise padded
 padShape :: NdArray -> [Integer] -> NdArray
-padDimension (NdArray v s) r = undefined
-  
+padShape (NdArray v s) r =
+  let
+    newSize = fromInteger @Int (P.product r)
+    nullVec = V.replicate newSize (indentityElem' v)
+    fi i = fromIntegral @Int @Integer i
+    newIndicies = imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
+  in
+    NdArray (unsafeUpdate_ nullVec newIndicies v) r
+
+
 -- | Common Errors | -- 
 shapeMismatch :: String -> String -> String
 shapeMismatch s1 s2 = "Cannot match first array of shape '" <> s1 <> "' with array of shape '" <> s2 <> "'."
@@ -189,7 +228,7 @@ typeMismatch t1 t2 = "Cannot match first array of type '" <> t1 <> "' with array
 
 
 ---- Testing
-
+--update_ (fromList [100,200,300::Int]) (fromList [0,1::Int]) (fromList [2,4::Int])
 -- Helper trying to simplify the type checking....
 
 {- I think this is a dead end.... just do the case by case
@@ -224,5 +263,7 @@ unwrapND (NdArray v s) = case typeOf x of
 
 nd1 :: NdArray
 nd2 :: NdArray
+nd3 :: NdArray
 nd1 = NdArray (fromList [1,2,3::Int]) [3]
 nd2 = NdArray (fromList [10,11,12::Int]) [3]
+nd3 = NdArray (fromList [2,4,8,16::Int]) [2,2]
