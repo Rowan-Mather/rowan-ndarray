@@ -9,17 +9,42 @@ author:             Rowan Mather
 maintainer:         rowan@myrtle.ai
 -- copyright:
 build-type:         Simple
-extra-doc-files:    CHANGELOG.md
+-- extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 library
-    exposed-modules:  Numskull, Serialisation
+    import library-deps
+    exposed-modules:  Numskull, Serialisation, DType
     -- other-modules:
     -- other-extensions:
     build-depends:    base >=4.13.0.0
-                    , dense
                     , vector
                     , split
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options: -Wall
+
+test-suite test
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     test
+  main-is:            Test.hs
+  other-modules:      Test.Numskull
+                      Test.Serialisation
+  build-depends:      base >=4.13.0.0
+                    , hspec 
+                    , QuickCheck
+                    , ndarray
+  ghc-options:         -Wall
+  default-language:    Haskell2010
+
+test-suite doctest
+  import library-deps
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     test, src
+  main-is:            DocTest.hs
+  build-depends:      base >=4.13.0.0
+                    , doctest
+                    , vector
+                    , split
+  ghc-options:         -Wall
+  default-language:    Haskell2010
