@@ -7,9 +7,10 @@ import System.IO
 import qualified Data.Vector.Storable as S
 import Data.Word (Word16)
 import Data.List as List
-import Foreign (ForeignPtr, Ptr, alloca)
-import Foreign.Storable (poke, sizeOf)
+import Foreign (ForeignPtr, Ptr, alloca, mallocBytes)
+import Foreign.Storable (poke, peek, sizeOf)
 
+import Data.Binary
 import Data.List.Split
 
 -- built in numpy serialisation descriptions
@@ -25,7 +26,7 @@ getNumpyDType (NdArray v _) = case show $ ty v of
   _                 -> error "Non-standard types cannot be serialised. Yet."
   
 getNumpyShape :: NdArray -> String
-getNumpyShape (NdArray _ s) = "(" <> (take (length lshape -1) $ drop 1 $ lshape) <> ")"
+getNumpyShape (NdArray _ s) = "(" <> (drop 1 $ take (length lshape -1) $ lshape) <> ",)"
   where lshape = show s
 
 getElemSize :: NdArray -> Int
@@ -62,7 +63,18 @@ saveNpy path (NdArray v s) = withBinaryFile path WriteMode $ \h -> do
   --unsafeWithPtr a $ \ptr -> hPutBuf h ptr (size nd * sizeOf (undefined :: (NumpyType a)=>a))
   S.unsafeWith v (\ptr -> hPutBuf h ptr (vectorSize * elemSize))
 
-loadNpy :: FilePath -> IO ()
+buffInt :: Handle -> IO Int
+buffInt h = do
+  ptr <- mallocBytes 3
+  hGetBuf h (ptr :: Ptr Int) (sizeOf (undefined ::Int))
+  val <- peek ptr
+  pure val
+
+buffInts :: Handle -> Integer -> [IO Int]
+buffInts _ 0 = []
+buffInts h i = do (buffInt h) : buffInts h (i-1)
+
+loadNpy :: FilePath -> IO NdArray
 loadNpy path = withBinaryFile path ReadMode $ \h -> do
   descr <- hGetLine h
   let 
@@ -70,18 +82,33 @@ loadNpy path = withBinaryFile path ReadMode $ \h -> do
     dtype = takeWhile (/='\'') $ drop 2 $ attrs !! 1
     shapeStrs = splitOn "," $ takeWhile (/=')') $ drop 2 $ attrs !! 3
     shape = map (\x -> read x :: Integer) $ take (length shapeStrs -1) shapeStrs
+    size = product shape
     temp = sizeOf (undefined ::Int)
-  alloca $ \ptr -> do
-    buff <- hGetBuf h ptr temp
-    putStrLn $ show $ buff
+  let lio = buffInts h size
+  l <- traverse id lio
+  pure $ NdArray (S.fromList l :: S.Vector Int) shape
+  
+  {-
+  t <- alloca (\ptr -> hGetBuf h (ptr :: Ptr Int) temp)
+  t2 <- alloca (\ptr -> hGetBuf h (ptr :: Ptr Int) temp)
+  t3 <- alloca (\ptr -> hGetBuf h (ptr :: Ptr Int) temp)
+  --rest <- thing
+  let ts = show t ++ show t2 ++ show t3
+  putStrLn $ ts
 --  alloca $ \ptr -> poke ptr (fromIntegral headerLen :: Word16) >> hPutBuf h ptr 2
+-}
+
+--f :: Handle -> Int -> IO Int
+--f h temp = malloc $ \ptr -> hGetBuf h (ptr :: Ptr Int) (temp :: Int)
 
 loadNpz = undefined
 
 saveNpz = undefined
 
 testsave :: IO ()
-testsave = do saveNpy "./testout/idk.npy" (NdArray (S.fromList [1,2,3 :: Int]) [3])
+testsave = do saveNpy "./src/testout/test123.npy" (NdArray (S.fromList [1,2,3 :: Int]) [3])
 
 testload :: IO ()
-testload = do loadNpy "./src/testout/idk.npy"
+testload = do 
+  nd <- loadNpy "./src/testout/test123.npy"
+  putStrLn $ show $ nd
