@@ -20,7 +20,6 @@ library
                     , dense
                     , vector
                     , split
-                    , binary
     hs-source-dirs:   src
     default-language: Haskell2010
     ghc-options: -Wall
