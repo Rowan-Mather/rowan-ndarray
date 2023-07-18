@@ -9,7 +9,7 @@ import GHC.Float (float2Double)
 
 -- Basis for all pointwise operations
 class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
-  identity :: a 
+  identity :: a
   -- Numeric
   add :: a -> a -> a
   subtract :: a -> a -> a
@@ -32,48 +32,10 @@ class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
   invert :: a -> a
   shiftleft :: a -> a
   shiftright :: a -> a
-  -- Standard Conversions
-  dtypeToInt :: a -> Int
-  --dtypeToFloat :: a -> Float
-  --dtypeToDouble :: a -> Double
-  --dtypeToBool :: a -> Bool
+  -- Casting
+  dtypeToRational :: a -> Rational
+  rationalToDtype :: Rational -> a
 
-{- 
---INSTANCE TEMPLATE-- 
-instance DType TYPE where 
-    -- Numeric
-  add x y = 
-  subtract x y = 
-  multiply x y = 
-  divide x y = double
-  div x y = 
-  power x d = double
-  pow x y = 
-  log x y = 
-  mod x y = integer
-  abs x = 
-  ceil x = 
-  floor x = 
-  -- Trig
-  sin x = 
-  cos x =
-  tan x = 
-  -- Logical 
-  invert x = 
-  shiftleft x = 
-  shiftright x = 
-  -- Comparative
-  eq x y = 
-  leq x y = 
-  geq x y = 
-  less x y = 
-  greater x y = 
-  -- Standard Conversions
-  dtypeToInt x = 
-  dtypeToFloat x = 
-  dtypeToDouble x = 
-  dtypeToBool x = 
--}
 
 instance DType Int where 
   identity = 0
@@ -85,24 +47,28 @@ instance DType Int where
   div = P.div
   power x d = fromIntegral x ** d
   pow x y = x ^ y
-  log x y = (P.floor (logBase ((fromIntegral x) :: Double) ((fromIntegral y) :: Double))) :: Int
+  log x y = (P.floor $ logBase xd yd) :: Int
+    where xd = fromIntegral @Int @Double x
+          yd = fromIntegral @Int @Double y
   mod x y = fromIntegral (x `P.mod` y) :: Integer
   abs = P.abs
   signum = P.signum
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ iTf x) :: Int
-  cos x = (round $ P.cos $ iTf x) :: Int
-  tan x = (round $ P.tan $ iTf x) :: Int
+  sin = roundIntFunc P.sin
+  cos = roundIntFunc P.cos
+  tan = roundIntFunc P.tan
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
   -- (Conversions)
-  dtypeToInt x = x
+  dtypeToRational = toRational
+  rationalToDtype = floor . fromRational @Double
 
-iTf = fromIntegral @Int @Float
+roundIntFunc :: (Float -> Float) -> Int -> Int
+roundIntFunc f x = (round $ f $ fromIntegral @Int @Float x) :: Int
 
 
 --instance DType Int64 where?
@@ -118,11 +84,12 @@ instance DType Float where
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = (fromIntegral (P.floor x `P.mod` P.floor y)) :: Integer
+  mod x y = (fromIntegral (xi `P.mod` yi)) :: Integer
+    where xi = P.floor x; yi = P.floor y
   abs = P.abs
   signum = P.signum
-  ceil x = (fromIntegral $ P.ceiling x) :: Float 
-  floor x = (fromIntegral $ P.floor x) :: Float
+  ceil = fromIntegral @Float . P.ceiling 
+  floor = fromIntegral @Float . P.floor
   -- Trig
   sin = P.sin
   cos = P.cos
@@ -131,8 +98,9 @@ instance DType Float where
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x / 2
-  -- (Conversions)
-  dtypeToInt x = (P.floor x) :: Int
+  -- Conversion
+  dtypeToRational = toRational
+  rationalToDtype = fromRational @Float
 
 --instance DType Double
 
@@ -140,10 +108,10 @@ instance DType Bool where
   identity = False
     -- Numeric
   add x y = x || y
-  subtract x y = toEnum (fromEnum x - fromEnum y)
+  subtract x y = (x || y) && not (x && y)
   multiply x y = x && y
   divide _x _y = undefined
-  div x y = (x || y) && not (x && y)
+  div x y = not (x && y)
   power _x _d = undefined
   pow x y = toEnum (fromEnum x ^ fromEnum y)
   log _x _y = undefined
@@ -152,27 +120,22 @@ instance DType Bool where
   signum = id
   ceil = id
   floor = id
-  -- Trig
-  sin = boolEnumOp P.sin
-  cos = boolEnumOp P.cos
-  tan = boolEnumOp P.tan
+  -- Trig (False = 0, True = 1 or /=0)
+  sin False = False
+  sin True = True
+  cos False = True
+  cos True = True
+  tan False = False
+  tan True = True
   -- Logical 
   invert x = not x
   shiftleft _ = False
   shiftright _ = False
-  -- Comparative
-  {-
-  eq x y = x == y
-  leq x y = x <= y
-  geq x y = x >= y
-  less x y = x < y
-  greater x y = x > y
-  -}
-  -- (Conversions)
-  dtypeToInt x = (fromEnum x) :: Int
-
-boolEnumOp :: (RealFrac a1 , Num a2) => (a2 -> a1) -> Bool -> Bool
-boolEnumOp f x = 0 /= ((round $ f $ fromIntegral $ fromEnum x) :: Integer)
+  -- Conversions
+  dtypeToRational False = 0
+  dtypeToRational True = 1
+  rationalToDtype 0 = False
+  rationalToDtype _ True
 
 --instance DType Char where?
 
