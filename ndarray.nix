@@ -1,8 +1,13 @@
-{ mkDerivation, base, dense, lib }:
+{ mkDerivation, base, doctest, hspec, lib, QuickCheck, split
+, vector
+}:
 mkDerivation {
   pname = "ndarray";
   version = "0.1.0.0";
   src = ./.;
-  libraryHaskellDepends = [ base dense ];
+  libraryHaskellDepends = [ base split vector ];
+  testHaskellDepends = [
+    base doctest hspec QuickCheck split vector
+  ];
   license = lib.licenses.mit;
 }
