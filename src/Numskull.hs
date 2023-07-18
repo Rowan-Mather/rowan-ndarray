@@ -12,30 +12,39 @@ import Data.Vector.Storable as V
 import Data.Dynamic -- Not needed?
 import Type.Reflection
 
--- | Typing shorthand | -- 
-ty :: Typeable a => a -> TypeRep a
-ty x = typeOf x
+-- $setup
+-- >>> import Numskull as N
 
+
+-- * Typing Shorthand 
+-- | typeOf synonym.
+ty :: Typeable a => a -> TypeRep a
+ty = typeOf
+
+-- | eqTypeRep synonym, returning Just HRefl in the case of type equality.
 (=@=) :: (Typeable a, Typeable b) => a -> b -> Maybe (a :~~: b)
 (=@=) v u = eqTypeRep (ty v) (ty u)
 
+-- * NdArray
 -- Todo: Should shapes be [Integer] or [Int] or maybe even another vector?
--- NdArray --
--- The core of this module. NdArrays can be of any type (a) and size/shape (list of dimensions) but these are
+-- | The core of this module. NdArrays can be of any type (a) and size/shape (list of dimensions) but these are
 -- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
 data NdArray where
-  NdArray :: DType a => Vector a -> [Integer] -> NdArray
+  NdArray :: DType a => [Integer] -> Vector a -> NdArray
+
+fromList :: DType a => [Integer] -> [a] -> NdArray
+fromList shape content = NdArray shape (V.fromList content)
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
-  show (NdArray v s) = show v <> show s
+  show (NdArray s v) = show s <> show v
 
 instance Eq NdArray where
-  (NdArray v s) == (NdArray u r) = (r == s) && 
+  (NdArray s v) == (NdArray r u) = (r == s) && 
     case v =@= u of
       Just HRefl -> v == u
       Nothing    -> False
-  (NdArray v s) /= (NdArray u r) = (r /= s) || 
+  (NdArray s v) /= (NdArray r u) = (r /= s) || 
     case v =@= u of
       Just HRefl -> v /= u
       Nothing    -> True
@@ -43,12 +52,12 @@ instance Eq NdArray where
 -- Investigate how Vector implements further
 -- Todo: check max and min work properly on all dtypes, probably use a map instead
 instance Ord NdArray where
-  (NdArray v s) `compare` (NdArray u r) = if s == r then case v =@= u of
+  (NdArray s v) `compare` (NdArray r u) = if s == r then case v =@= u of
       Just HRefl -> compare v u
       Nothing    -> error $ typeMismatch (show v) (show u)
     else error $ shapeMismatch (show s) (show r)
   
-  (NdArray v s) <= (NdArray u r) = if s == r then case v =@= u of
+  (NdArray s v) <= (NdArray r u) = if s == r then case v =@= u of
       Just HRefl -> v <= u
       Nothing    -> error $ typeMismatch (show v) (show u)
     else error $ shapeMismatch (show s) (show r)
@@ -63,10 +72,13 @@ instance Num NdArray where
   (+) = pointwiseZip add
   (-) = pointwiseZip DType.subtract
   (*) = undefined -- Matrix multiplication
-  negate (NdArray v s) = NdArray (V.map DType.invert v) s
-  abs (NdArray v s) = NdArray (V.map DType.abs v) s
-  signum (NdArray v s) = NdArray (V.map DType.signum v) s
-  fromInteger x = NdArray (singleton $ fromInteger @Int x) [1]
+  negate (NdArray s v) = NdArray s (V.map DType.invert v)
+  abs (NdArray v s) = NdArray s (V.map DType.abs v)
+  signum (NdArray v s) = NdArray s (V.map DType.signum v)
+  fromInteger x = NdArray [1] (singleton $ fromInteger @Int x)
+
+size :: [Integer] -> Int
+size shape = (fromIntegral $ P.product shape) :: Int
 
 -- | Creation | --
 -- Todo: get the ident of the dtype from an nd array
@@ -76,8 +88,14 @@ indentityElem' :: forall a . DType a => Vector a -> a
 indentityElem' _ = DType.identity :: DType a => a
 
 -- Todo: Create ident array of certain shape
-zeros = undefined 
-  
+{-
+zeros :: forall a . DType a => TypeRep a -> [Integer] -> NdArray
+zeros t s = NdArray zerovec s
+  where
+    ident = (DType.identity :: DType a => a)
+    zerovec = (V.replicate (size s) ident) :: DType a => Vector a
+-}
+
 -- | Indexing & Slicing | -- 
 -- Since vectors are 1D arrays but the matricicies can have n-dimensions, index conversion is neccessary
 -- The index i will be the 1D index
@@ -117,9 +135,9 @@ expandInd shape i = expandRun shape i 1
 -- Two Arguments
 -- https://hackage.haskell.org/package/base-4.18.0.0/docs/Control-Monad-ST.html#v:runST
 pointwiseZip :: (forall t . DType t => t -> t -> t) -> NdArray -> NdArray -> NdArray
-pointwiseZip zipfunc (NdArray v s) (NdArray u r) = if s == r then 
+pointwiseZip zipfunc (NdArray s v) (NdArray r u) = if s == r then 
   case v =@= u of
-    Just HRefl -> NdArray (V.zipWith zipfunc v u) s -- Types match
+    Just HRefl -> NdArray s (V.zipWith zipfunc v u) -- Types match
     Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
   else error $ shapeMismatch (show s) (show r)
 
@@ -147,38 +165,35 @@ elemPow = pointwiseZip pow
 -- Use the TypeApplications syntax: 
 -- case typeOf x `eqTypeRep` typeRep @Integer of 
 matchDType :: NdArray -> NdArray -> Maybe NdArray
-matchDType (NdArray v _) (NdArray u r) = case v =@= fromList [1::Int] of
-  Just HRefl  -> Just $ NdArray (V.map dtypeToInt u) r
+matchDType (NdArray _ v) (NdArray r u) = case v =@= V.fromList [1::Int] of
+  Just HRefl  -> Just $ NdArray r (V.map dtypeToInt u)
   _           -> Nothing
 
 -- Check that the matrix isn't larger than the shape but if so truncate it
-constrainSize :: DType a => Vector a -> [Integer] -> (Bool, Vector a)
-constrainSize v s =
-  if size < len then (False, V.take size v)
+constrainSize :: DType a => [Integer] -> Vector a -> (Bool, Vector a)
+constrainSize s v =
+  if (size s) < len then (False, V.take (size s) v)
   else (True, v)
-  where 
-    size = fromInteger (P.product s) :: Int
+  where
     len = V.length v
 
 -- Fill out any spaces in a vector smaller than the shape with 0s (or whatever the dtype 'identity' is)
-padSize :: DType a => Vector a -> [Integer] -> Vector a
-padSize v s = v V.++ V.replicate (size - len) identity
-  where 
-    size = fromInteger (P.product s) :: Int
-    len = V.length v
+padSize :: DType a => [Integer] -> Vector a -> Vector a
+padSize s v = v V.++ V.replicate ((size s) - len) identity
+  where len = V.length v
 
 -- Contrain or pad the vector to match the size
-setSize :: DType a => Vector a -> [Integer] -> Vector a
-setSize v s = let (unchanged, u) = constrainSize v s in
-  if unchanged then padSize u s else u
+setSize :: DType a => [Integer] -> Vector a -> Vector a
+setSize s v = let (unchanged, u) = constrainSize s v in
+  if unchanged then padSize s u else u
 
 -- Constrain or pad the NdArray to match the new given size
 resize :: NdArray -> [Integer] -> NdArray
-resize (NdArray v _) r = NdArray (setSize v r) r
+resize (NdArray _ v) r = NdArray (setSize r v) r
 
 reshape :: NdArray -> [Integer] -> Maybe NdArray
-reshape (NdArray v s) r = if P.product s == P.product r
-  then Just $ NdArray v r
+reshape (NdArray s v) r = if P.product s == P.product r
+  then Just $ NdArray r v
   else Nothing
 
 --NB: reshape will pad/truncate individual dimensions whereas resize keeps as many values as possible but they might switch position
@@ -186,34 +201,27 @@ reshape (NdArray v s) r = if P.product s == P.product r
 map1DIndex :: [Integer] -> [Integer] -> Integer -> Integer
 map1DIndex s r i = collapseInd r (expandInd s i)
 
--- ok then what im gonna do is make an array of all the mapping and value pairs and // it
-
 mapShapeLoss :: [Integer] -> [Integer] -> Bool
 mapShapeLoss s r = 
   if P.length r < P.length s then True
   else P.or $ P.zipWith (>) s r
 
-{-
-hack :: forall a . DType a => a -> a
-hack _ = (DType.identity :: DType a => a)
-
-vectorHack :: forall a . DType a => Vector a -> Vector a
-vectorHack _ = singleton (DType.identity :: DType a => a)
-
-vectorHack' :: forall a . DType a => Vector a -> a
-vectorHack' _ = DType.identity :: DType a => a
--}
-
 -- If you try to map to a smaller shape, values are dropped & weird stuff happens, otherwise padded
+
+-- | Some helpful documentation
+--
+-- >>> padShape (Numskull.fromList [2] [3,4 :: Int]) [5]
+-- [3,4,0,0,0][5]
+--
 padShape :: NdArray -> [Integer] -> NdArray
-padShape (NdArray v s) r =
+padShape (NdArray s v) r =
   let
     newSize = fromInteger @Int (P.product r)
     nullVec = V.replicate newSize (indentityElem' v)
     fi i = fromIntegral @Int @Integer i
-    newIndicies = imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
+    newIndices = imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
   in
-    NdArray (unsafeUpdate_ nullVec newIndicies v) r
+    NdArray (unsafeUpdate_ nullVec newIndices v) r
 
 
 -- | Common Errors | -- 
@@ -222,48 +230,3 @@ shapeMismatch s1 s2 = "Cannot match first array of shape '" <> s1 <> "' with arr
 
 typeMismatch :: String -> String -> String
 typeMismatch t1 t2 = "Cannot match first array of type '" <> t1 <> "' with array of type '" <> t2 <> "'."
-
-
-
-
-
----- Testing
---update_ (fromList [100,200,300::Int]) (fromList [0,1::Int]) (fromList [2,4::Int])
--- Helper trying to simplify the type checking....
-
-{- I think this is a dead end.... just do the case by case
-eqDType :: (Typeable a, Typeable b) => a -> b -> Bool
-eqDType x y = case eqTypeRep (typeOf x) (typeOf y) of 
-  Just HRefl  -> True
-  _           -> False
-
-equey :: NdArray -> NdArray -> Vector Bool
-equey (NdArray v1 s1) (NdArray v2 s2) =
-    if eqDType (NdArray v1 s1) (NdArray v2 s2)
-    then V.zipWith (==) v1 v2 
-    else (fromList [True]) :: Vector Bool
--}
-
-{- Pointwise zip with type conversion (TODO)
-pointwiseZip (NdArray v s) (NdArray u r) = case (eqTypeRep xtype ytype, matchDType (NdArray v s) (NdArray u r)) of
-        (Just HRefl, _)     -> NdArray (V.zipWith add x y) -- Types match
-        -- Code to auto-cast types
-        --(_, Just casted)    -> (NdArray v s) + casted -- Second type can be converted to first
-        _                   -> error ("Cannot match second matrix of type '" P.++ show ytype P.++ "' to type '" P.++ show xtype P.++ "'.")
-        where
-            xtype = ty x; ytype = ty y
--}
-
-{-
-unwrapND :: NdArray -> (String, Vector Dynamic)
-unwrapND (NdArray v s) = case typeOf x of
-    vecTypeInt      -> ("Int", V.map toDyn x)
-    vecTypeBool     -> ("Bool", V.map toDyn x)
--}
-
-nd1 :: NdArray
-nd2 :: NdArray
-nd3 :: NdArray
-nd1 = NdArray (fromList [1,2,3::Int]) [3]
-nd2 = NdArray (fromList [10,11,12::Int]) [3]
-nd3 = NdArray (fromList [2,4,8,16::Int]) [2,2]
