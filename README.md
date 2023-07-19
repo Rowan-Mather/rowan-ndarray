@@ -1,4 +1,4 @@
-# rowan-ndarray
+# rowan-numskull
 
 ## Development
 
@@ -19,10 +19,10 @@ Source repositories specified in `cabal.project` should be kept up to date with
 
 #### cabal2nix
 
-`ndarray.nix` should be updated with
+`numskull.nix` should be updated with
 
 ```sh
-$ cabal2nix . > ndarray.nix
+$ cabal2nix . > numskull.nix
 ```
 
 whenever the Cabal file is updated with e.g. new dependencies.
