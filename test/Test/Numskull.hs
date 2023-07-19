@@ -28,3 +28,5 @@ spec = do
 
 
 -- https://hackage.haskell.org/package/hspec-2.11.3/docs/Test-Hspec.html#v:example
+
+-- https://hspec.github.io/

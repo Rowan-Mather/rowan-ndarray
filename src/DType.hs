@@ -65,13 +65,12 @@ instance DType Int where
   shiftright x = x `P.div` 2
   -- (Conversions)
   dtypeToRational = toRational
-  rationalToDtype = floor . fromRational @Double
+  rationalToDtype = P.floor . fromRational @Double
 
 roundIntFunc :: (Float -> Float) -> Int -> Int
 roundIntFunc f x = (round $ f $ fromIntegral @Int @Float x) :: Int
 
-
---instance DType Int64 where?
+--instance DType Int64 where
 
 instance DType Float where 
   identity = 0.0
@@ -88,8 +87,8 @@ instance DType Float where
     where xi = P.floor x; yi = P.floor y
   abs = P.abs
   signum = P.signum
-  ceil = fromIntegral @Float . P.ceiling 
-  floor = fromIntegral @Float . P.floor
+  ceil = fromIntegral @Integer @Float . P.ceiling
+  floor = fromIntegral @Integer @Float . P.floor
   -- Trig
   sin = P.sin
   cos = P.cos
@@ -135,7 +134,7 @@ instance DType Bool where
   dtypeToRational False = 0
   dtypeToRational True = 1
   rationalToDtype 0 = False
-  rationalToDtype _ True
+  rationalToDtype _ = True
 
 --instance DType Char where?
 

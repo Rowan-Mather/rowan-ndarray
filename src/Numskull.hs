@@ -6,6 +6,7 @@
 module Numskull where
 
 import DType
+import MatrixForm
 
 import Prelude as P
 import Data.Vector.Storable as V
@@ -22,6 +23,10 @@ ty :: Typeable a => a -> TypeRep a
 ty = typeOf
 
 -- | eqTypeRep synonym, returning Just HRefl in the case of type equality.
+-- >>> case True =@= False of
+-- >>>  Just HRefl -> putStrLn "Two Booleans will match"
+-- >>>  Nothing    -> putStrLn "Mismatching types"
+-- Two Booleans will match
 (=@=) :: (Typeable a, Typeable b) => a -> b -> Maybe (a :~~: b)
 (=@=) v u = eqTypeRep (ty v) (ty u)
 
@@ -31,9 +36,6 @@ ty = typeOf
 -- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
 data NdArray where
   NdArray :: DType a => [Integer] -> Vector a -> NdArray
-
-fromList :: DType a => [Integer] -> [a] -> NdArray
-fromList shape content = NdArray shape (V.fromList content)
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
@@ -77,15 +79,30 @@ instance Num NdArray where
   signum (NdArray v s) = NdArray s (V.map DType.signum v)
   fromInteger x = NdArray [1] (singleton $ fromInteger @Int x)
 
+
+-- * Creation & Miscellaneous
+
+-- | Gets the total number of elements in a given array shape.
 size :: [Integer] -> Int
 size shape = (fromIntegral $ P.product shape) :: Int
 
--- | Creation | --
+fromList :: DType a => [Integer] -> [a] -> NdArray
+fromList shape l = 
+  if length l /= size shape then error "Length of the list should match the total number of elements specified by the shape."
+  else NdArray shape (V.fromList l)
+
+fromListFlat :: DType a => [Integer] -> [a] -> NdArray
+fromList l = NdArray [genericLength @Integer l] (V.fromList l)
+
+fromMatrix :: TreeMatrix -> NdArray
+fromMatrix m = NdArray (matrixShape m) (V.fromList $ flattenToList m)
+
 -- Todo: get the ident of the dtype from an nd array
 indentityElem = undefined
 
 indentityElem' :: forall a . DType a => Vector a -> a
 indentityElem' _ = DType.identity :: DType a => a
+
 
 -- Todo: Create ident array of certain shape
 {-
@@ -96,35 +113,65 @@ zeros t s = NdArray zerovec s
     zerovec = (V.replicate (size s) ident) :: DType a => Vector a
 -}
 
--- | Indexing & Slicing | -- 
--- Since vectors are 1D arrays but the matricicies can have n-dimensions, index conversion is neccessary
--- The index i will be the 1D index
--- Then x y z... for each dimension index
--- i = x + y*xsize + z*xsize*ysize + ...
--- x = i % xsize;   y = i/(xsize) % ysize;   z = i/(xsize*ysize) % zsize;   ...
--- As described: https://softwareengineering.stackexchange.com/questions/212808/treating-a-1d-data-structure-as-2d-grid
+-- * Indexing & Slicing
+{- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
+we convert between the vector index, i, and multi-dimension index, [x,y,z,...], using the 
+shape of the array, [sx,sy,sz,...], as follows: 
+  
+  i = x + y*sx + z*sx*sy + ...
+  
+  x = i/(1) % sx
+  y = i/(sx) % sy
+  z = i/(sx*sy) % sz 
+  ...
 
--- helper for collapseInd
--- can this be folded? its over two things so i dont think so... only if i zip it
+-}
+
+-- | Converts a shape and multi-index to a 1D index.
+collapseInd :: [Integer] -> [Integer] -> Integer
+collapseInd shape indicies = collapseRun shape indicies 1
+
+-- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
 collapseRun _ [] _ = 0
 collapseRun [] _ _ = 0
 collapseRun (s:ss) (x:xs) runSize = x*runSize + collapseRun ss xs (s*runSize)
 
-collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd shape indicies = collapseRun shape indicies 1
+-- | Converts a shape and 1D index to a multi-index.
+expandInd :: [Integer] -> Integer -> [Integer]
+expandInd shape i = expandRun shape i 1
 
--- helper for expandInd
+-- Helper for expandInd
 expandRun :: [Integer] -> Integer -> Integer -> [Integer]
 expandRun [] _ _ = []
 expandRun (s:ss) i runSize = x : expandRun ss i (s*runSize)
   where x = (i `P.div` runSize) `P.mod` s
 
-expandInd :: [Integer] -> Integer -> [Integer]
-expandInd shape i = expandRun shape i 1
+-- | Checks an index does not exceed the shape
+validIndex :: NdArray -> [Integer] -> Bool
+validIndex (NdArray s v) i = (length s == length v) && and $ zipWith lessAbs s i
+  where lessAbs x y = (y>=0 && y<x) || (-y <= x)
 
--- The actual indexing bit todo
--- Slicing Todo :)
+{- | Takes a multi-dimensional index and returns the value in the NdArray at that position.
+Indicies can be negative, where -1 is the row in that dimension.
+If an index exceeds the size of its dimension, a value will still be returned, the identity
+value for the array e.g. 0. To avoid this use !?.
+-} 
+(#!) :: NdArray -> [Integer] -> Dtype
+(NdArray s v) #! i = case (NdArray s v) !? i of
+  Just val -> val
+  Nothing -> indentityElem' v
+
+{- | The safer version of #! which returns Nothing if an index exceeds the shape bounds. -}
+(!?) :: NdArray -> [Integer] -> Maybe Dtype
+(NdArray s v) !? i =
+  let 
+    valid = validIndex (NdArray s v) i
+    positives = zipWith (\x y -> if y < 0 then x+y else y) s i
+  in
+    if valid then Just $ v ! (collapseInd s positives) else Nothing
+
+-- Todo: slicing
 
 -- | Pointwise Functions | -- 
 -- All the numpy-like functions not defined within the Eq, Ord or Num instances
@@ -222,7 +269,6 @@ padShape (NdArray s v) r =
     newIndices = imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
   in
     NdArray (unsafeUpdate_ nullVec newIndices v) r
-
 
 -- | Common Errors | -- 
 shapeMismatch :: String -> String -> String
