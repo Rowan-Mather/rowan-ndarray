@@ -2,7 +2,7 @@
 , vector
 }:
 mkDerivation {
-  pname = "ndarray";
+  pname = "numskull";
   version = "0.1.0.0";
   src = ./.;
   libraryHaskellDepends = [ base split vector ];
