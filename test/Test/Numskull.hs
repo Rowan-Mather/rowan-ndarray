@@ -29,3 +29,5 @@ spec = do
 -- http://hoogle.jeeves.myrtle/file/nix/store/93d2fwbq53zclxallszy9ih0nbgcb5zw-hspec-expectations-0.8.2-doc/share/doc/hspec-expectations-0.8.2/html/Test-Hspec-Expectations.html#v:shouldBe
 
 -- https://hackage.haskell.org/package/hspec-2.11.3/docs/Test-Hspec.html#v:example
+
+-- https://hspec.github.io/
