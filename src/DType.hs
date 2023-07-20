@@ -79,11 +79,11 @@ instance DType Float where
   subtract x y = x - y
   multiply x y = x * y
   divide x y = float2Double (x / y)
-  div x y = (fromIntegral (P.floor x `P.div` P.floor y)) :: Float
+  div x y = fromIntegral (P.floor x `P.div` P.floor y) :: Float
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = (fromIntegral (xi `P.mod` yi)) :: Integer
+  mod x y = fromIntegral (xi `P.mod` yi):: Integer
     where xi = P.floor x; yi = P.floor y
   abs = P.abs
   signum = P.signum
