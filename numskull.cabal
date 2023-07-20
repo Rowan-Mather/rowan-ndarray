@@ -14,7 +14,7 @@ build-type:         Simple
 
 library
     import library-deps
-    exposed-modules:  Numskull, Serialisation, DType
+    exposed-modules:  Numskull, Serialisation, DType, MatrixForm
     -- other-modules:
     -- other-extensions:
     build-depends:    base >=4.13.0.0
