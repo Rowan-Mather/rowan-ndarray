@@ -6,6 +6,7 @@
 
 module Numskull where
 
+import NdArray
 import qualified DType
 import DType (DType)
 import MatrixForm
@@ -30,13 +31,6 @@ ty = typeOf
 -- Two Booleans will match
 (=@=) :: (Typeable a, Typeable b) => a -> b -> Maybe (a :~~: b)
 (=@=) v u = eqTypeRep (ty v) (ty u)
-
--- * NdArray
--- Todo: Should shapes be [Integer] or [Int] or maybe even another vector?
--- | The core of this module. NdArrays can be of any type (a) and size/shape (list of dimensions) but these are
--- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
-data NdArray where
-  NdArray :: DType a => [Integer] -> Vector a -> NdArray
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where

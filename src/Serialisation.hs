@@ -2,6 +2,7 @@ module Serialisation where
 
 import Numskull
 import DType
+import NdArray
 
 import System.IO
 import Data.List as List
