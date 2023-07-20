@@ -2,15 +2,16 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Numskull where
 
-import DType
+import qualified DType
+import DType (DType)
 import MatrixForm
 
-import Prelude as P
-import Data.Vector.Storable as V
-import Data.Dynamic -- Not needed?
+import qualified Data.Vector.Storable as V
+import Data.Vector.Storable (Vector)
 import Type.Reflection
 
 -- $setup
@@ -39,9 +40,10 @@ data NdArray where
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
-  show (NdArray s v) = show s <> show v
+  show (NdArray s v) = show s <> " " <> show v
 
 instance Eq NdArray where
+  -- | Arrays are equal if their elements and shape exactly match.
   (NdArray s v) == (NdArray r u) = (r == s) && 
     case v =@= u of
       Just HRefl -> v == u
@@ -51,9 +53,10 @@ instance Eq NdArray where
       Just HRefl -> v /= u
       Nothing    -> True
 
--- Investigate how Vector implements further
--- Todo: check max and min work properly on all dtypes, probably use a map instead
 instance Ord NdArray where
+  {- | Arrays are only comparable when they are the same shape. Then they are 
+  ordered by pointwise comparison.
+  -}
   (NdArray s v) `compare` (NdArray r u) = if s == r then case v =@= u of
       Just HRefl -> compare v u
       Nothing    -> error $ typeMismatch (show v) (show u)
@@ -63,48 +66,69 @@ instance Ord NdArray where
       Just HRefl -> v <= u
       Nothing    -> error $ typeMismatch (show v) (show u)
     else error $ shapeMismatch (show s) (show r)
-  --  (>)     (NdArray v s) (NdArray u r) = u > v
-  --  (>=)    (NdArray v s) (NdArray u r) = u >= v
-  --  max     (NdArray v s)               = V.maximum v
-  --  min     (NdArray v s)               = V.minimum v
 
 -- To do: matrix multiplication :O
 -- To do: change fromInteger to return an integer array rather than int
 instance Num NdArray where
-  (+) = pointwiseZip add
+  -- | Adds elements pointwise
+  (+) = pointwiseZip DType.add
+  -- | Subtracts elements pointwise
   (-) = pointwiseZip DType.subtract
-  (*) = undefined -- Matrix multiplication
+  -- | Matrix multiplication TODO
+  (*) = undefined
+  -- | Inverts all elements according to their DType instance
   negate (NdArray s v) = NdArray s (V.map DType.invert v)
-  abs (NdArray v s) = NdArray s (V.map DType.abs v)
-  signum (NdArray v s) = NdArray s (V.map DType.signum v)
-  fromInteger x = NdArray [1] (singleton $ fromInteger @Int x)
-
+  -- | Absolute value of each element
+  abs (NdArray s v) = NdArray s (V.map DType.abs v)
+  -- | Signum of each element
+  signum (NdArray s v) = NdArray s (V.map DType.signum v)
+  -- Creates a singleton array
+  fromInteger = singleton . fromInteger @Int
 
 -- * Creation & Miscellaneous
 
 -- | Gets the total number of elements in a given array shape.
+-- >>> size [2,3]
+-- 6
 size :: [Integer] -> Int
-size shape = (fromIntegral $ P.product shape) :: Int
+size shape = (fromIntegral $ product shape) :: Int
 
+-- Todo: get the ident of the dtype from an nd array
+indentityElem = undefined
+
+-- Helper for the vectors in identityElem
+indentityElem' :: forall a . DType a => Vector a -> a
+indentityElem' _ = DType.identity :: DType a => a
+
+-- | Creates an NdArray from a given shape and list. The number of elements must match.
 fromList :: DType a => [Integer] -> [a] -> NdArray
 fromList shape l = 
   if length l /= size shape then error "Length of the list should match the total number of elements specified by the shape."
   else NdArray shape (V.fromList l)
 
-fromListFlat :: DType a => [Integer] -> [a] -> NdArray
-fromList l = NdArray [genericLength @Integer l] (V.fromList l)
+-- | Creates a 1xn NdArray from a list.
+fromListFlat :: DType a => [a] -> NdArray
+fromListFlat l = NdArray [fromIntegral$length l :: Integer] (V.fromList l)
 
-fromMatrix :: TreeMatrix -> NdArray
-fromMatrix m = NdArray (matrixShape m) (V.fromList $ flattenToList m)
+{-| Creates an NdArray from an explicitly given matrix such as the example 2x3. -}
+-- >>> m = A [A [B 1,  B 2],
+-- >>>        A [B 3,  B 4],
+-- >>>        A [B 5,  B 6]]
+--
+fromMatrix :: DType a => TreeMatrix a -> NdArray
+fromMatrix m = NdArray (matrixShape m) (V.fromList l)
+  where l = flattenToList $ matrixToTree m
 
--- Todo: get the ident of the dtype from an nd array
-indentityElem = undefined
+-- | Creates a 1x1 matrix
+singleton :: DType a => a -> NdArray
+singleton x = NdArray [1] (V.fromList [x])
 
-indentityElem' :: forall a . DType a => Vector a -> a
-indentityElem' _ = DType.identity :: DType a => a
+{- | Creates the smallest possible square matrix from the given list, 
+padding out any required space with the identity element for the DType -}
+squareArr = undefined
 
-
--- Todo: Create ident array of certain shape
+{- | Creates an array of the given shape of the identity element for the given type. -}
+zeros = undefined
 {-
 zeros :: forall a . DType a => TypeRep a -> [Integer] -> NdArray
 zeros t s = NdArray zerovec s
@@ -145,31 +169,47 @@ expandInd shape i = expandRun shape i 1
 expandRun :: [Integer] -> Integer -> Integer -> [Integer]
 expandRun [] _ _ = []
 expandRun (s:ss) i runSize = x : expandRun ss i (s*runSize)
-  where x = (i `P.div` runSize) `P.mod` s
+  where x = (i `div` runSize) `mod` s
 
 -- | Checks an index does not exceed the shape
 validIndex :: NdArray -> [Integer] -> Bool
-validIndex (NdArray s v) i = (length s == length v) && and $ zipWith lessAbs s i
-  where lessAbs x y = (y>=0 && y<x) || (-y <= x)
+validIndex (NdArray s _) i = (length i == length s) && (and $ zipWith lessAbs i s)
+  where lessAbs x y = (0 <= x && x < y) || (0 < -x && -x <= y)
 
 {- | Takes a multi-dimensional index and returns the value in the NdArray at that position.
 Indicies can be negative, where -1 is the row in that dimension.
 If an index exceeds the size of its dimension, a value will still be returned, the identity
 value for the array e.g. 0. To avoid this use !?.
 -} 
-(#!) :: NdArray -> [Integer] -> Dtype
+-- >>> m = fromListFlat [2,4,8 :: Int]
+-- >>> m #! [1] :: Int
+-- 4
+-- >>> m #! [50] :: Int
+-- 0
+(#!) :: DType a => NdArray -> [Integer] -> a
 (NdArray s v) #! i = case (NdArray s v) !? i of
   Just val -> val
-  Nothing -> indentityElem' v
+  Nothing -> DType.identity :: DType a => a
 
 {- | The safer version of #! which returns Nothing if an index exceeds the shape bounds. -}
-(!?) :: NdArray -> [Integer] -> Maybe Dtype
+-- >>> m = fromListFlat [2,4,8 :: Int]
+-- >>> m !? [1] :: Maybe Int
+-- Just 4
+-- >>> m !? [50] :: Maybe Int
+-- Nothing
+(!?) :: forall a . DType a => NdArray -> [Integer] -> Maybe a
 (NdArray s v) !? i =
   let 
-    valid = validIndex (NdArray s v) i
+    -- Converts any negative indicies to their equivalent positives
     positives = zipWith (\x y -> if y < 0 then x+y else y) s i
+    flatInd = fromIntegral $ collapseInd s positives :: Int
   in
-    if valid then Just $ v ! (collapseInd s positives) else Nothing
+    -- The type comparison should always hold
+    if validIndex (NdArray s v) i then
+      case ty v `eqTypeRep` typeRep @(Vector a) of
+        Just HRefl -> Just (v V.! flatInd) :: Maybe a -- Indexing the vector
+        Nothing -> Nothing
+    else Nothing
 
 -- Todo: slicing
 
@@ -190,7 +230,7 @@ pointwiseZip zipfunc (NdArray s v) (NdArray r u) = if s == r then
   else error $ shapeMismatch (show s) (show r)
 
 elemMultiply :: NdArray -> NdArray -> NdArray
-elemMultiply = pointwiseZip multiply
+elemMultiply = pointwiseZip DType.multiply
 
 -- Todo: Needs to operate on doubles
 --elemDivide :: NdArray -> NdArray -> NdArray
@@ -204,7 +244,7 @@ elemDiv = pointwiseZip DType.div
 --elemPower = pointwiseZip power
 
 elemPow :: NdArray -> NdArray -> NdArray
-elemPow = pointwiseZip pow
+elemPow = pointwiseZip DType.pow
 
 -- | Type & Shape Conversion | --
 -- Converting between the standard dtypes and changing the shapes of matricies
@@ -212,10 +252,13 @@ elemPow = pointwiseZip pow
 -- To do: add many more possible types you can convert to
 -- Use the TypeApplications syntax: 
 -- case typeOf x `eqTypeRep` typeRep @Integer of 
+-- TODO USING dtypetorational
+{-
 matchDType :: NdArray -> NdArray -> Maybe NdArray
 matchDType (NdArray _ v) (NdArray r u) = case v =@= V.fromList [1::Int] of
   Just HRefl  -> Just $ NdArray r (V.map dtypeToInt u)
   _           -> Nothing
+-}
 
 -- Check that the matrix isn't larger than the shape but if so truncate it
 constrainSize :: DType a => [Integer] -> Vector a -> (Bool, Vector a)
@@ -227,7 +270,7 @@ constrainSize s v =
 
 -- Fill out any spaces in a vector smaller than the shape with 0s (or whatever the dtype 'identity' is)
 padSize :: DType a => [Integer] -> Vector a -> Vector a
-padSize s v = v V.++ V.replicate ((size s) - len) identity
+padSize s v = v V.++ V.replicate ((size s) - len) DType.identity
   where len = V.length v
 
 -- Contrain or pad the vector to match the size
@@ -237,10 +280,10 @@ setSize s v = let (unchanged, u) = constrainSize s v in
 
 -- Constrain or pad the NdArray to match the new given size
 resize :: NdArray -> [Integer] -> NdArray
-resize (NdArray _ v) r = NdArray (setSize r v) r
+resize (NdArray _ v) r = NdArray r (setSize r v)
 
 reshape :: NdArray -> [Integer] -> Maybe NdArray
-reshape (NdArray s v) r = if P.product s == P.product r
+reshape (NdArray s v) r = if product s == product r
   then Just $ NdArray r v
   else Nothing
 
@@ -251,8 +294,8 @@ map1DIndex s r i = collapseInd r (expandInd s i)
 
 mapShapeLoss :: [Integer] -> [Integer] -> Bool
 mapShapeLoss s r = 
-  if P.length r < P.length s then True
-  else P.or $ P.zipWith (>) s r
+  if length r < length s then True
+  else or $ zipWith (>) s r
 
 -- If you try to map to a smaller shape, values are dropped & weird stuff happens, otherwise padded
 
@@ -264,12 +307,12 @@ mapShapeLoss s r =
 padShape :: NdArray -> [Integer] -> NdArray
 padShape (NdArray s v) r =
   let
-    newSize = fromInteger @Int (P.product r)
+    newSize = fromInteger @Int (product r)
     nullVec = V.replicate newSize (indentityElem' v)
     fi i = fromIntegral @Int @Integer i
-    newIndices = imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
+    newIndices = V.imap (\i _ -> fromInteger @Int $ map1DIndex s r (fi i)) v
   in
-    NdArray (unsafeUpdate_ nullVec newIndices v) r
+    NdArray r (V.unsafeUpdate_ nullVec newIndices v)
 
 -- | Common Errors | -- 
 shapeMismatch :: String -> String -> String
