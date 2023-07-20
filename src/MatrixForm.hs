@@ -8,12 +8,14 @@ import qualified Data.Vector.Storable as V
 
 data TreeMatrix a = B a | A [TreeMatrix a]
 
+-- READING MATRICIES
 matrixToTree :: TreeMatrix a -> Tree [a]
 matrixToTree (B x)  = Node [x] []
 matrixToTree (A xs) = Node [] (map matrixToTree xs)
 
 -- Example 2x3x2
 {-
+l :: TreeMatrix Int
 l   = A [A [A [B 1,  B 2],
             A [B 3,  B 4],
             A [B 5,  B 6]],
@@ -35,16 +37,9 @@ treeShape t = zipWith (\x y -> fromIntegral $ div x y ::Integer) (drop 1 levelLe
   where levelLen = map length $ levels t
 
 matrixShape :: TreeMatrix a -> [Integer]
-matrixShape = treeShape . matrixToTree
+matrixShape = reverse . treeShape . matrixToTree
 
-
-addNewlines :: [Integer] -> [(Integer, String)] -> [(Integer, String)]
-addNewlines [] xs = xs
-addNewlines (l:ls) xs = map (\(i,x) -> if i /= 0 && i `mod` l == 0 then (i, "\n"++x) else (i,x)) (addNewlines ls xs)
-
-padStringTo :: Int -> String -> String
-padStringTo i s = replicate (i - length s) ' ' ++ s ++ " "
-
+-- WRITING MATRICIES
 printArray :: NdArray -> IO ()
 printArray (NdArray s v) = putStr $ conc <> "\n"
   where
@@ -54,3 +49,10 @@ printArray (NdArray s v) = putStr $ conc <> "\n"
     spaced = zipWith (\i x -> (i, padStringTo largest x)) [0..] vl
     lined = addNewlines newlines spaced
     conc = concatMap snd lined
+
+padStringTo :: Int -> String -> String
+padStringTo i s = replicate (i - length s) ' ' ++ s ++ " "
+
+addNewlines :: [Integer] -> [(Integer, String)] -> [(Integer, String)]
+addNewlines [] xs = xs
+addNewlines (l:ls) xs = map (\(i,x) -> if i /= 0 && i `mod` l == 0 then (i, "\n"++x) else (i,x)) (addNewlines ls xs)
