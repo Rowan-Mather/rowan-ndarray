@@ -14,6 +14,8 @@ import MatrixForm
 import qualified Data.Vector.Storable as V
 import Data.Vector.Storable (Vector)
 import Type.Reflection
+import qualified Data.Map as M
+import Data.Maybe (fromJust)
 
 -- $setup
 -- >>> import Numskull as N
@@ -86,7 +88,10 @@ instance Num NdArray where
 -- >>> size [2,3]
 -- 6
 size :: [Integer] -> Int
-size shape = (fromIntegral $ product shape) :: Int
+size sh = (fromIntegral $ product sh) :: Int
+
+shape :: NdArray -> [Integer]
+shape (NdArray s _) = s
 
 -- Todo: get the ident of the dtype from an nd array
 indentityElem = undefined
@@ -100,9 +105,9 @@ indentityElem' _ = DType.identity :: DType a => a
 -- 1 2 
 -- 3 4 
 fromList :: DType a => [Integer] -> [a] -> NdArray
-fromList shape l = 
-  if length l /= size shape then error "Length of the list should match the total number of elements specified by the shape."
-  else NdArray shape (V.fromList l)
+fromList sh l = 
+  if length l /= size sh then error "Length of the list should match the total number of elements specified by the shape."
+  else NdArray sh (V.fromList l)
 
 -- | Creates a 1xn NdArray from a list.
 -- >>> printArray $ fromListFlat [1,2,3,4::Int]
@@ -129,19 +134,19 @@ fromMatrix m = NdArray (matrixShape m) (V.fromList l)
 singleton :: DType a => a -> NdArray
 singleton x = NdArray [1] (V.fromList [x])
 
+arange = undefined
+
 {- | Creates the smallest possible square matrix from the given list, 
 padding out any required space with the identity element for the DType -}
 squareArr = undefined
 
 {- | Creates an array of the given shape of the identity element for the given type. -}
-zeros = undefined
-{-
 zeros :: forall a . DType a => TypeRep a -> [Integer] -> NdArray
-zeros t s = NdArray zerovec s
+zeros t s = NdArray s zerovec
   where
     ident = (DType.identity :: DType a => a)
     zerovec = (V.replicate (size s) ident) :: DType a => Vector a
--}
+
 
 -- * Indexing & Slicing
 {- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
@@ -156,10 +161,24 @@ shape of the array, [sx,sy,sz,...], as follows:
   ...
 
 -}
+generateIndicies :: [Integer] -> [[Integer]]
+generateIndicies = map reverse . foldr (\x xs -> [ (i:t) | i <- [0..x], t <- xs]) [[]]
+-- foldr (\x xs -> [ (i:t) | i <- [0..x], t <- xs]) [[]] [2,3,2]
+
+mapIndicies :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
+mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
+  where 
+    twoDinds = generateIndicies sh
+    oneDkey = zip [0..] twoDinds
+    twoDkey = zip twoDinds [0..]
+
+-- trying to put the type EVERYWHERE haha
+vecInd :: forall a . DType a => M.Map [Integer] Int -> (forall a . DType a => NdArray) -> [Integer] -> a
+vecInd mapp (NdArray _ (v :: forall a . DType a => Vector a)) i = v V.! (mapp M.! i)
 
 -- | Converts a shape and multi-index to a 1D index.
 collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd shape indicies = collapseRun shape indicies 1
+collapseInd sh indicies = collapseRun sh indicies 1
 
 -- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
@@ -169,7 +188,7 @@ collapseRun (s:ss) (x:xs) runSize = x*runSize + collapseRun ss xs (s*runSize)
 
 -- | Converts a shape and 1D index to a multi-index.
 expandInd :: [Integer] -> Integer -> [Integer]
-expandInd shape i = expandRun shape i 1
+expandInd sh i = expandRun sh i 1
 
 -- Helper for expandInd
 expandRun :: [Integer] -> Integer -> Integer -> [Integer]
@@ -225,11 +244,15 @@ value for the array e.g. 0. To avoid this use !?.
 
 -- * Pointwise Functions  -- 
 -- All the numpy-like functions not defined within the Eq, Ord or Num instances
--- Single Argument
 
--- To do ;)
+----- One Argument
 
--- Two Arguments
+mapA :: (DType a, DType b) => (a -> b) -> NdArray -> NdArray
+--map f (NdArray s v) = NdArray s (fmap f v)
+mapA = undefined
+
+----- Two Arguments
+
 -- | The generic function for operating on two DType arrays with the same shape in an element-wise/pointwise way.
 -- >>> x = fromList [2,2] [1,2,3,4 :: Int]
 -- >>> y = fromList [2,2] [5,2,2,2 :: Int]
@@ -269,6 +292,14 @@ NB the difference between 'size' and 'shape'. The shape is an Integer list
 describing the width of each dimension. Size refers to the total number of 
 elements in the array, i.e. the product of the shape.
 -}
+
+-- | Converts an NdArray of one type to any other with a DType instance.
+convertDTypeTo :: DType a => NdArray -> TypeRep a -> NdArray
+convertDTypeTo = undefined
+
+-- | Converts the second NdArray to be the same DType as the first.
+matchDType :: NdArray -> NdArray -> NdArray
+matchDType = undefined
 
 -- To do: add many more possible types you can convert to
 -- Use the TypeApplications syntax: 
@@ -349,9 +380,54 @@ padShape r (NdArray s v) =
     then NdArray r (V.unsafeUpdate_ nullVec newIndices v)
     else error "Cannot map to a smaller shape."
 
+-- * Matrix Operations
+
+-- For now, just nxm and mxp = nxp
+{-
+matMul :: NdArray -> NdArray -> NdArray
+matMul (NdArray s v) (NdArray r u) = 
+  if (length s /= 2) || (length r /= 2) || s!!1 /= r!!0 then 
+    error "Invalid matrix dimensions."
+  else case v =@= u of 
+    Nothing -> error "Mismatching types"
+    Just HRefl -> 
+      
+      NdArray sh (matMulVec sh (NdArray s v) (NdArray r u))  
+      where sh = [s!!0, r!!1]
+
+-- returning the vector result of the matMul
+matMulVec :: DType a => 
+  [Integer] -> NdArray -> NdArray -> Vector a
+
+matMulVec sh nd1 nd2 =
+  let 
+    (oneDkey, twoDkey) = mapIndicies sh
+    sz = M.size oneDkey
+  in 
+    V.generate sz (matMulElem twoDkey nd1 nd2 . (M.!) oneDkey)
+
+-- element at position [i,j] in the resultant nxp matrix (from matMultiplying a nxm and mxp) 
+matMulElem :: DType a => 
+  M.Map [Integer] Int -> NdArray -> NdArray -> [Integer] -> a
+
+matMulElem mapp nd1 nd2 (i:j:_) =
+  let
+    (>!) = vecInd mapp -- Map the 2D index to 1D & get value
+    ks = [1 .. shape nd2 !! 0]
+    z = DType.identity
+  in
+    foldr (\k acc -> DType.add acc $ DType.multiply (nd1>![i,k]) (nd2>![k,j])) z ks
+    --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
+-}
+
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
 shapeMismatch s1 s2 = "Cannot match first array of shape '" <> s1 <> "' with array of shape '" <> s2 <> "'."
 
 typeMismatch :: String -> String -> String
 typeMismatch t1 t2 = "Cannot match first array of type '" <> t1 <> "' with array of type '" <> t2 <> "'."
+
+nd1 :: NdArray
+nd1 = fromList [3,2] [1,2,3,4,5,6::Int]
+nd2 :: NdArray
+nd2 = fromList [2,3] [0,2,4,6,8,10::Int]
