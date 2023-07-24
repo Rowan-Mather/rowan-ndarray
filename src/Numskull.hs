@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Numskull where
 
@@ -142,7 +143,7 @@ squareArr = undefined
 
 {- | Creates an array of the given shape of the identity element for the given type. -}
 zeros :: forall a . DType a => TypeRep a -> [Integer] -> NdArray
-zeros t s = NdArray s zerovec
+zeros _ s = NdArray s zerovec
   where
     ident = (DType.identity :: DType a => a)
     zerovec = (V.replicate (size s) ident) :: DType a => Vector a
@@ -162,7 +163,7 @@ shape of the array, [sx,sy,sz,...], as follows:
 
 -}
 generateIndicies :: [Integer] -> [[Integer]]
-generateIndicies = map reverse . foldr (\x xs -> [ (i:t) | i <- [0..x], t <- xs]) [[]]
+generateIndicies = foldr (\x xs -> [ (i:t) | i <- [0..(x-1)], t <- xs]) [[]]
 -- foldr (\x xs -> [ (i:t) | i <- [0..x], t <- xs]) [[]] [2,3,2]
 
 mapIndicies :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
@@ -172,13 +173,15 @@ mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
     oneDkey = zip [0..] twoDinds
     twoDkey = zip twoDinds [0..]
 
--- trying to put the type EVERYWHERE haha
-vecInd :: forall a . DType a => M.Map [Integer] Int -> (forall a . DType a => NdArray) -> [Integer] -> a
-vecInd mapp (NdArray _ (v :: forall a . DType a => Vector a)) i = v V.! (mapp M.! i)
+-- Unsafe: Indexes the vector with the multi-index using a mapping 
+vecInd :: forall a . DType a => M.Map [Integer] Int -> Vector a -> [Integer] -> a
+vecInd mapp v i = v V.! (mapp M.! i)
+--vecInd mapp v i = case v =@= (undefined :: Vector a) of
+--  Just HRefl -> v V.! (mapp M.! i)
 
 -- | Converts a shape and multi-index to a 1D index.
 collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd sh indicies = collapseRun sh indicies 1
+collapseInd sh indicies = collapseRun (reverse$sh) (reverse$indicies) 1
 
 -- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
@@ -188,7 +191,7 @@ collapseRun (s:ss) (x:xs) runSize = x*runSize + collapseRun ss xs (s*runSize)
 
 -- | Converts a shape and 1D index to a multi-index.
 expandInd :: [Integer] -> Integer -> [Integer]
-expandInd sh i = expandRun sh i 1
+expandInd sh i = reverse $ expandRun (reverse$sh) i 1
 
 -- Helper for expandInd
 expandRun :: [Integer] -> Integer -> Integer -> [Integer]
@@ -383,42 +386,38 @@ padShape r (NdArray s v) =
 -- * Matrix Operations
 
 -- For now, just nxm and mxp = nxp
-{-
 matMul :: NdArray -> NdArray -> NdArray
-matMul (NdArray s v) (NdArray r u) = 
+matMul (NdArray s v) (NdArray r u) =
   if (length s /= 2) || (length r /= 2) || s!!1 /= r!!0 then 
     error "Invalid matrix dimensions."
-  else case v =@= u of 
-    Nothing -> error "Mismatching types"
-    Just HRefl -> 
-      
-      NdArray sh (matMulVec sh (NdArray s v) (NdArray r u))  
-      where sh = [s!!0, r!!1]
+  else case v =@= u of
+    Just HRefl -> NdArray sh (matMulVec s v r u)
+    _ -> error "Mismatching types"
+  where
+    sh = [s!!0, r!!1]
 
 -- returning the vector result of the matMul
-matMulVec :: DType a => 
-  [Integer] -> NdArray -> NdArray -> Vector a
-
-matMulVec sh nd1 nd2 =
-  let 
-    (oneDkey, twoDkey) = mapIndicies sh
-    sz = M.size oneDkey
-  in 
-    V.generate sz (matMulElem twoDkey nd1 nd2 . (M.!) oneDkey)
-
--- element at position [i,j] in the resultant nxp matrix (from matMultiplying a nxm and mxp) 
-matMulElem :: DType a => 
-  M.Map [Integer] Int -> NdArray -> NdArray -> [Integer] -> a
-
-matMulElem mapp nd1 nd2 (i:j:_) =
+matMulVec :: forall a . DType a => 
+  [Integer] -> Vector a -> [Integer] -> Vector a -> Vector a
+matMulVec s v r u =
   let
-    (>!) = vecInd mapp -- Map the 2D index to 1D & get value
-    ks = [1 .. shape nd2 !! 0]
-    z = DType.identity
+    oneDkey = fst $ mapIndicies [s!!0, r!!1]
+    sz = M.size oneDkey
+    map1 = vecInd (snd $ mapIndicies s) v
+    map2 = vecInd (snd $ mapIndicies r) u
+    ks = [0 .. (s!!1 -1)]
   in
-    foldr (\k acc -> DType.add acc $ DType.multiply (nd1>![i,k]) (nd2>![k,j])) z ks
+    V.generate sz (matMulElem map1 map2 ks . (M.!) oneDkey)
+
+-- element at position [i,j] in the resultant nxp matrix (from matMultiplying a prev: mxn and pxm = pxn) 
+--matMulElem :: DType a => 
+--  NdArray -> M.Map [Integer] Int -> NdArray -> M.Map [Integer] Int -> [Integer] -> a
+matMulElem :: DType a =>
+  ([Integer] -> a) -> ([Integer] -> a) -> [Integer] -> [Integer] -> a
+matMulElem map1 map2 ks (i:j:_) =
+  foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.identity ks
     --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
--}
+
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
@@ -427,7 +426,9 @@ shapeMismatch s1 s2 = "Cannot match first array of shape '" <> s1 <> "' with arr
 typeMismatch :: String -> String -> String
 typeMismatch t1 t2 = "Cannot match first array of type '" <> t1 <> "' with array of type '" <> t2 <> "'."
 
-nd1 :: NdArray
-nd1 = fromList [3,2] [1,2,3,4,5,6::Int]
-nd2 :: NdArray
-nd2 = fromList [2,3] [0,2,4,6,8,10::Int]
+ndt1 :: NdArray
+ndt1 = fromList [3,2] [1,2,3,4,5,6::Int]
+ndt2 :: NdArray
+ndt2 = fromList [2,3] [0,2,4,6,8,10::Int]
+
+nd3 = fromList [2,2] [1,2,3,4 :: Int]
