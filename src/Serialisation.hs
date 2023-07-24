@@ -106,6 +106,6 @@ testsave :: IO ()
 testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (S.fromList [1,2,3 :: Int]) )
 
 testload :: IO ()
-testload = do 
+testload = do
   nd <- loadNpy "./src/testout/test123.npy"
   putStrLn $ show $ nd
