@@ -250,9 +250,49 @@ value for the array e.g. 0. To avoid this use !?.
 
 ----- One Argument
 
-mapA :: (DType a, DType b) => (a -> b) -> NdArray -> NdArray
---map f (NdArray s v) = NdArray s (fmap f v)
-mapA = undefined
+mapA :: forall a . forall b . (DType a, DType b) => (a -> b) -> NdArray -> NdArray
+mapA f (NdArray s v) = case v =@= (undefined :: Vector a) of 
+  Just HRefl -> NdArray s (V.map f v)
+  _ -> error "Function input does not match array type."
+
+--mapA :: (forall a . forall b . (DType a, DType b) => a -> b) -> NdArray -> NdArray
+--mapA f (NdArray s v) = NdArray s (V.map f v)
+
+mapTransform :: (forall a . DType a => a -> a) -> NdArray -> NdArray
+mapTransform f (NdArray s v) = NdArray s (V.map f v)
+
+scale :: forall a . DType a => a -> NdArray -> NdArray
+scale x = mapA (DType.multiply x)
+
+abs :: NdArray -> NdArray
+abs = mapTransform (DType.abs)
+
+signum :: NdArray -> NdArray
+signum = mapTransform (DType.signum)
+
+ceil :: NdArray -> NdArray
+ceil = mapTransform (DType.ceil)
+
+floor :: NdArray -> NdArray
+floor = mapTransform (DType.floor)
+
+sin :: NdArray -> NdArray
+sin = mapTransform (DType.sin)
+
+cos :: NdArray -> NdArray
+cos = mapTransform (DType.cos)
+
+tan :: NdArray -> NdArray
+tan = mapTransform (DType.tan)
+
+invert :: NdArray -> NdArray
+invert = mapTransform (DType.invert)
+
+shiftleft :: NdArray -> NdArray
+shiftleft = mapTransform (DType.shiftleft)
+
+shiftright :: NdArray -> NdArray
+shiftright = mapTransform (DType.shiftright)
 
 ----- Two Arguments
 
@@ -295,14 +335,34 @@ NB the difference between 'size' and 'shape'. The shape is an Integer list
 describing the width of each dimension. Size refers to the total number of 
 elements in the array, i.e. the product of the shape.
 -}
+extractType' :: forall a . DType a => Vector a -> TypeRep a
+extractType' v = typeRep @a
+extractType :: DType a => NdArray -> TypeRep a
+extractType (NdArray s v) = extractType' v 
 
 -- | Converts an NdArray of one type to any other with a DType instance.
-convertDTypeTo :: DType a => NdArray -> TypeRep a -> NdArray
-convertDTypeTo = undefined
+convertDTypeTo :: forall a . DType a => TypeRep a -> NdArray -> NdArray
+convertDTypeTo t (NdArray s v) = NdArray s (V.map convert v)
+  where 
+    convert x = case (V.singleton x) =@= v of 
+      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
+      _ -> error "Impossible type mismatch."
 
 -- | Converts the second NdArray to be the same DType as the first.
 matchDType :: NdArray -> NdArray -> NdArray
-matchDType = undefined
+matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
+  where 
+    convert x = case (V.singleton x) =@= u of 
+      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
+      _ -> error "Impossible type mismatch."
+
+-- Todo extract the type then call this fnction to effectively pattern match on the type
+matchDType' :: NdArray -> TypeRep a -> NdArray -> TypeRep b -> NdArray
+matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
+  where 
+    convert x = case (V.singleton x) =@= u of 
+      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
+      _ -> error "Impossible type mismatch."
 
 -- To do: add many more possible types you can convert to
 -- Use the TypeApplications syntax: 
