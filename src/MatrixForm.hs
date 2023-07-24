@@ -37,7 +37,7 @@ treeShape t = zipWith (\x y -> fromIntegral $ div x y ::Integer) (drop 1 levelLe
   where levelLen = map length $ levels t
 
 matrixShape :: TreeMatrix a -> [Integer]
-matrixShape = reverse . treeShape . matrixToTree
+matrixShape = treeShape . matrixToTree
 
 -- WRITING MATRICIES
 printArray :: NdArray -> IO ()
@@ -45,7 +45,7 @@ printArray (NdArray s v) = putStr $ conc <> "\n"
   where
     vl = map show (V.toList v)
     largest = maximum $ map length vl
-    newlines = scanl1 (*) s
+    newlines = scanr1 (*) s
     spaced = zipWith (\i x -> (i, padStringTo largest x)) [0..] vl
     lined = addNewlines newlines spaced
     conc = concatMap snd lined
