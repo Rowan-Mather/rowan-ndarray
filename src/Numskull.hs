@@ -94,6 +94,16 @@ size sh = (fromIntegral $ product sh) :: Int
 shape :: NdArray -> [Integer]
 shape (NdArray s _) = s
 
+-- | Gets the TypeRep for the NdArray elements
+ndType :: forall a . DType a => NdArray -> TypeRep a
+ndType (NdArray _ v) = case v =@= (undefined :: Vector a) of 
+  Just HRefl -> vecType v :: TypeRep a
+  _ -> error "Impossible type mismatch."
+
+-- Helper to get the vector typeRep
+vecType :: forall a . DType a => Vector a -> TypeRep a
+vecType _ = typeRep @a
+
 -- Todo: get the ident of the dtype from an nd array
 indentityElem = undefined
 
@@ -335,19 +345,26 @@ NB the difference between 'size' and 'shape'. The shape is an Integer list
 describing the width of each dimension. Size refers to the total number of 
 elements in the array, i.e. the product of the shape.
 -}
-extractType' :: forall a . DType a => Vector a -> TypeRep a
-extractType' v = typeRep @a
-extractType :: DType a => NdArray -> TypeRep a
-extractType (NdArray s v) = extractType' v 
 
 -- | Converts an NdArray of one type to any other with a DType instance.
 convertDTypeTo :: forall a . DType a => TypeRep a -> NdArray -> NdArray
-convertDTypeTo t (NdArray s v) = NdArray s (V.map convert v)
-  where 
-    convert x = case (V.singleton x) =@= v of 
-      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
-      _ -> error "Impossible type mismatch."
+convertDTypeTo t (NdArray s v) = convertDTFromTo (vecType v) t (NdArray s v)
 
+-- Helper with additional typing information
+convertDTFromTo :: forall a b . (DType a, DType b) =>
+  TypeRep a -> TypeRep b -> NdArray -> NdArray
+convertDTFromTo t1 t2 (NdArray s v) = case v =@= (undefined :: Vector a) of
+  Just HRefl -> NdArray s (V.map convert v)
+  _ -> error "Impossible type mismatch."
+  where
+    convert :: (DType a, DType b) => a -> b
+    convert x = DType.rationalToDtype (DType.dtypeToRational x)
+
+-- | Converts the second NdArray to be the same DType as the first.
+matchDType :: NdArray -> NdArray -> NdArray
+matchDType (NdArray _ v) nd = convertDTypeTo (vecType v) nd 
+
+{-
 -- | Converts the second NdArray to be the same DType as the first.
 matchDType :: NdArray -> NdArray -> NdArray
 matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
@@ -355,14 +372,19 @@ matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
     convert x = case (V.singleton x) =@= u of 
       Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
       _ -> error "Impossible type mismatch."
-
+-}
+{-
 -- Todo extract the type then call this fnction to effectively pattern match on the type
-matchDType' :: NdArray -> TypeRep a -> NdArray -> TypeRep b -> NdArray
-matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
-  where 
-    convert x = case (V.singleton x) =@= u of 
-      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
+matchDType' :: forall a . forall b . NdArray -> TypeRep a -> NdArray -> TypeRep b -> NdArray
+matchDType' (NdArray _ v) t1 (NdArray r u) t2 = NdArray r (V.map convert u)
+  where
+    convert x = case eqTypeRep (ty v) t1 of
+      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: b
       _ -> error "Impossible type mismatch."
+-}
+    --case x =@= (undefined :: a) of
+    --  Just HRefl -> 
+    --  _ -> error "Impossible type mismatch."
 
 -- To do: add many more possible types you can convert to
 -- Use the TypeApplications syntax: 
