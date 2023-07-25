@@ -65,15 +65,14 @@ instance Ord NdArray where
       Nothing    -> error $ typeMismatch (show v) (show u)
     else error $ shapeMismatch (show s) (show r)
 
--- To do: matrix multiplication :O
 -- To do: change fromInteger to return an integer array rather than int
 instance Num NdArray where
   -- | Adds elements pointwise
   (+) = pointwiseZip DType.add
   -- | Subtracts elements pointwise
   (-) = pointwiseZip DType.subtract
-  -- | Matrix multiplication TODO
-  (*) = undefined
+  -- | Multiplies elements pointwise
+  (*) = pointwiseZip DType.multiply
   -- | Inverts all elements according to their DType instance
   negate (NdArray s v) = NdArray s (V.map DType.invert v)
   -- | Absolute value of each element
@@ -319,10 +318,6 @@ pointwiseZip zipfunc (NdArray s v) (NdArray r u) = if s == r then
     Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
   else error $ shapeMismatch (show s) (show r)
 
--- | Pointwise multiplication
-elemMultiply :: NdArray -> NdArray -> NdArray
-elemMultiply = pointwiseZip DType.multiply
-
 -- Todo: Needs to operate on doubles
 --elemDivide :: NdArray -> NdArray -> NdArray
 --elemDivide = pointwiseZip divide
@@ -363,39 +358,6 @@ convertDTFromTo t1 t2 (NdArray s v) = case v =@= (undefined :: Vector a) of
 -- | Converts the second NdArray to be the same DType as the first.
 matchDType :: NdArray -> NdArray -> NdArray
 matchDType (NdArray _ v) nd = convertDTypeTo (vecType v) nd 
-
-{-
--- | Converts the second NdArray to be the same DType as the first.
-matchDType :: NdArray -> NdArray -> NdArray
-matchDType (NdArray _ v) (NdArray r u) = NdArray r (V.map convert u)
-  where 
-    convert x = case (V.singleton x) =@= u of 
-      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: a
-      _ -> error "Impossible type mismatch."
--}
-{-
--- Todo extract the type then call this fnction to effectively pattern match on the type
-matchDType' :: forall a . forall b . NdArray -> TypeRep a -> NdArray -> TypeRep b -> NdArray
-matchDType' (NdArray _ v) t1 (NdArray r u) t2 = NdArray r (V.map convert u)
-  where
-    convert x = case eqTypeRep (ty v) t1 of
-      Just HRefl -> DType.rationalToDtype (DType.dtypeToRational x) :: b
-      _ -> error "Impossible type mismatch."
--}
-    --case x =@= (undefined :: a) of
-    --  Just HRefl -> 
-    --  _ -> error "Impossible type mismatch."
-
--- To do: add many more possible types you can convert to
--- Use the TypeApplications syntax: 
--- case typeOf x `eqTypeRep` typeRep @Integer of 
--- TODO USING dtypetorational
-{-
-matchDType :: NdArray -> NdArray -> Maybe NdArray
-matchDType (NdArray _ v) (NdArray r u) = case v =@= V.fromList [1::Int] of
-  Just HRefl  -> Just $ NdArray r (V.map dtypeToInt u)
-  _           -> Nothing
--}
 
 {- Helper which checks that the array isn't larger than the shape contraints. 
 If it is valid the Boolean in the pair will be true and the vector is returned.
