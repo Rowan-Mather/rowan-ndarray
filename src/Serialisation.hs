@@ -1,5 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+
 
 module Serialisation where
 
@@ -84,7 +86,33 @@ pairDict [] = []
 pairDict (_:[]) = []
 pairDict (k:v:ls) = (k, v) : pairDict ls
 
+--pyToTypeRep "<i8" = typeRep @Int
+--pyToTypeRep "<f4" = typeRep @Float 
+--pyToTypeRep :: DType a => String -> TypeRep a
+
+{-
+pyToTypeRep :: forall a . String -> (DType a => TypeRep a)
+pyToTypeRep dtype = case dtype of 
+  "<i4" -> typeRep @Int :: TypeRep a
+  --"<i8" ->
+  "<f4" -> typeRep @Float
+  --"<f8" ->
+  --"<?"  ->
+  --"<U1" -> 
+  _     -> error "Unsupported dtype."
+-}
+
 -- PAYLOAD
+-- Read in an element from the handle
+buffElement :: forall a . DType a => Handle -> IO a
+buffElement h = do
+  let elemSize = sizeOf (undefined :: a)
+  ptr <- mallocBytes elemSize
+  _ <- hGetBuf h ptr elemSize
+  val <- peek ptr
+  pure val
+
+-- Read in the complete array as a list from the handle
 buffArray :: forall a . DType a => TypeRep a -> Handle -> Integer -> [IO a]
 buffArray _ _ 0 = []
 buffArray t h i = do
@@ -93,19 +121,13 @@ buffArray t h i = do
     Just HRefl -> buffed
     _ -> error "Given TypeRep does not match data type."
 
--- todo take malloc size dynamically
-buffElement :: DType a => Handle -> IO a
-buffElement h = do
-  ptr <- mallocBytes 8
-  _ <- hGetBuf h (ptr) (sizeOf (undefined :: Int))
-  val <- peek ptr
-  pure val
-
-loadPayload :: forall a . DType a => FilePath -> TypeRep a -> IO NdArray
-loadPayload = undefined
+loadPayload :: forall a . DType a => Handle -> [Integer] -> TypeRep a -> IO NdArray
+loadPayload h sh t = do
+  l <- traverse id $ buffArray (typeRep @a) h (product sh)
+  pure $ NdArray sh (V.fromList l)
 
 -- | Loads an NdArray from a .npy file
-loadNpy :: forall a . DType a => FilePath -> TypeRep a -> IO NdArray
+loadNpy :: DType a => FilePath -> TypeRep a -> IO NdArray
 loadNpy path t = withBinaryFile path ReadMode $ \h -> do
   -- Unpacks and parses the header to get the array type and size
   descr <- hGetLine h
@@ -118,84 +140,19 @@ loadNpy path t = withBinaryFile path ReadMode $ \h -> do
     shapeStrs = filter (/= "") $ splitOn "," $ filter (`notElem`"()") (metadata M.! "shape:")
     sh = map (read @Integer) shapeStrs
     -- Calculates the total number of elements in the array
-    sz = product sh
+    --sz = product sh
   -- Reads the array itself into a list
-  {- kinda works
-  let buff = buffArray (typeRep @Int) h sz
-  case eqTypeRep (typeOf buff) (typeRep @[IO a]) of
-    Just HRefl -> traverse id buff
-    _ -> error ""
-  -}
-  l <- traverse id $ buffArray (typeRep @a) h sz
-  pure $ NdArray sh (V.fromList l)
+  loadPayload h sh t
 
-
-  --case eqTypeRep (typeOf buff) (typeRep @([IO a])) of
-  --  Just HRefl -> traverse id buff
-  --  _ -> error ""
-  {-
-  l <- traverse id (buffArray h sz)
-  case eqTypeRep (typeOf l) (typeRep @(IO (V.Vector a))) of 
-    Just HRefl -> pure $ NdArray sh (V.fromList l)
-    _ -> error ""
-  -}
-    {-}
-  let v = V.fromList l
-  -- Converts the list & shape to an NdArray
-  case eqTypeRep (typeOf v) (typeRep @(V.Vector a)) of
-    Just HRefl -> pure $ NdArray sh v
-    _ -> error "urghfjd"
--}
-
-{-
-thing :: DType a => Handle -> Integer -> String -> [IO a]
-thing h sz dt = traverse id $ buffStuffs h sz
-  --"<i4" ->
-  --"<i8" ->
-  "<f4" -> buffStuffs h sz
-  --"<f8" ->
-  --"<?"  ->
-  --"<U1" -> 
-  _     -> error "Unsupported dtype."
--}
-
-{-
--- Reads an Int value from the binary accessed via the handle
-buffInt :: Handle -> IO Int
-buffInt h = do
-  ptr <- mallocBytes 8
-  _ <- hGetBuf h (ptr :: Ptr Int) (sizeOf (undefined :: Int))
-  val <- peek ptr
-  pure val
-
-buffInts :: Handle -> Integer -> [IO Int]
-buffInts _ 0 = []
-buffInts h i = do (buffInt h) : buffInts h (i-1)
-
--- to do malloc with size of then you can try and pass it something generic
--- Reads an Int value from the binary accessed via the handle
-buffFloat :: Handle -> IO Float
-buffFloat h = do
-  ptr <- mallocBytes 4
-  _ <- hGetBuf h (ptr :: Ptr Float) (sizeOf (undefined :: Float))
-  val <- peek ptr
-  pure val
-
-buffFloats :: DType a => Handle -> Integer -> [IO a]
-buffFloats _ 0 = []
-buffFloats h i = do (buffFloat h) : buffFloats h (i-1)
--}
 -- Try it! It will probably break easily
 
 testsave :: IO ()
 testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (V.fromList [1,2,3 :: Int]) )
 
-
 testload :: IO ()
 testload = do
-  nd <- loadNpy "./testout/test123.npy" (typeOf (1::Int))
+  nd <- loadNpy "./testout/test123.npy" (typeRep @Int)
   putStrLn $ show $ nd
-
 
 {-
 -- Reads the array itself into a list
