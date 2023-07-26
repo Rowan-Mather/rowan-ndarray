@@ -500,8 +500,23 @@ transposePerm perm (NdArray sh v) =
         flatV = toV M.! (permuteList perm' multU)
       in v V.! flatV)
 
-determinant :: DType a => NdArray -> a
-determinant = undefined 
+-- Numpy only defines this as sets over the 2D square matricies
+-- If the matrix is non-square it is assumed to be padded out and will have det = 0
+-- https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html
+determinant :: NdArray -> [Int]
+determinant (NdArray s v) = case s of
+  [] -> []
+  [x] -> [0]
+  [x,y] | x =/ y -> [0] 
+  [x,y] -> [determinant2D (NdArray s v)]
+  _ -> undefined
+
+-- For a 2D matrix
+determinant2D :: NdArray -> Int 
+determinant2D (NdArray s v) = case s of 
+  [x,y] | x == y -> error "yes"
+  [x,y] | x =/ y -> 0
+  _ -> error "no"
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
