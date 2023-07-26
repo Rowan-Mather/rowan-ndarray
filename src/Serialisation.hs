@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE RankNTypes #-}
 
 
 module Serialisation where
@@ -9,6 +10,7 @@ import Numskull
 import DType
 import NdArray
 
+import Data.Int
 import System.IO
 import Data.List as List
 import Data.List.Split
@@ -74,7 +76,6 @@ saveNpy path (NdArray s v) = withBinaryFile path WriteMode $ \h -> do
   V.unsafeWith v (\ptr -> hPutBuf h ptr (vectorSize * elemSize))
 
 
-
 -- | PYTHON TO HASKELL | -- 
 
 -- METADATA
@@ -126,9 +127,23 @@ loadPayload h sh t = do
   l <- traverse id $ buffArray (typeRep @a) h (product sh)
   pure $ NdArray sh (V.fromList l)
 
+-- todo check unicode UTF
+reifyDType :: String -> (forall a . DType a => TypeRep a -> r) -> r
+reifyDType dtype cont =
+  case dtype of 
+    -- "<i8" -> cont (typeRep @Int64)
+    "<i8" -> cont (typeRep @Int)
+    -- "<i4" -> cont (typeRep @Int32)
+    "<f4" -> cont (typeRep @Float)
+    -- "<f8" -> cont (typeRep @Double)
+    -- "<U1" -> cont (typeRep @Char)
+    "<?"  -> cont (typeRep @Bool)
+    _     -> error "Unsupported dtype."
+
+
 -- | Loads an NdArray from a .npy file
-loadNpy :: DType a => FilePath -> TypeRep a -> IO NdArray
-loadNpy path t = withBinaryFile path ReadMode $ \h -> do
+loadNpy :: FilePath -> IO NdArray
+loadNpy path = withBinaryFile path ReadMode $ \h -> do
   -- Unpacks and parses the header to get the array type and size
   descr <- hGetLine h
   let
@@ -142,16 +157,16 @@ loadNpy path t = withBinaryFile path ReadMode $ \h -> do
     -- Calculates the total number of elements in the array
     --sz = product sh
   -- Reads the array itself into a list
-  loadPayload h sh t
+  reifyDType dtype (loadPayload h sh)
 
 -- Try it! It will probably break easily
 
 testsave :: IO ()
-testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (V.fromList [1,2,3 :: Int]) )
+testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (V.fromList [1,2,3 :: Float]) )
 
 testload :: IO ()
 testload = do
-  nd <- loadNpy "./testout/test123.npy" (typeRep @Int)
+  nd <- loadNpy "./src/testout/test123.npy"
   putStrLn $ show $ nd
 
 {-

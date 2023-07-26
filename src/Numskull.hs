@@ -17,6 +17,7 @@ import Data.Vector.Storable (Vector)
 import Type.Reflection
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
+import Data.List (sort, elemIndex)
 
 -- $setup
 -- >>> import Numskull as N
@@ -462,6 +463,45 @@ matMulElem map1 map2 ks (i:j:_) =
   foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.identity ks
     --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
 
+foldrArray :: forall a b . DType a => (a -> b -> b) -> b -> NdArray -> b
+foldrArray f z (NdArray _ v) = 
+  case v =@= (undefined :: Vector a) of
+    Just HRefl -> V.foldr f z v
+    _ -> error "Starting value type does not match array type."
+
+dot :: DType a => NdArray -> NdArray -> a
+dot nd1 nd2 = foldrArray (DType.add) (DType.identity) (nd1*nd2)
+
+-- reverse the order of axes
+transpose :: NdArray -> NdArray
+transpose = undefined
+
+-- Helper applies a permutation to a list
+permuteList :: [Int] -> [a] -> [a]
+permuteList perm l = if sort perm /= [0 .. length l -1] 
+  then error "Invalid permutation given."
+  else map (l!!) perm
+
+-- Helper which finds the inverse of a permutation
+invertPermutation :: [Int] -> [Int]
+invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm -1]
+
+-- | Transposes the axes of an array according to the given permutation (e.g. [2,0,1])
+transposePerm perm (NdArray sh v) =
+  let 
+    sh' = permuteList perm sh
+    perm' = invertPermutation perm
+    (_, toV) = mapIndicies sh
+    (fromU, _) = mapIndicies sh'
+    sz = V.length v
+  in NdArray sh' $ V.generate sz (\i -> 
+      let 
+        multU = fromU M.! i
+        flatV = toV M.! (permuteList perm' multU)
+      in v V.! flatV)
+
+determinant :: DType a => NdArray -> a
+determinant = undefined 
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
