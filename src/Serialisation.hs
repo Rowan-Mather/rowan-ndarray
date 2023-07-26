@@ -161,6 +161,7 @@ loadNpy path = withBinaryFile path ReadMode $ \h -> do
 
 -- Try it! It will probably break easily
 
+-- withTempFile
 testsave :: IO ()
 testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (V.fromList [1,2,3 :: Float]) )
 
