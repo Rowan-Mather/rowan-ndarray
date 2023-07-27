@@ -37,6 +37,12 @@ ty = typeOf
 (=@=) :: (Typeable a, Typeable b) => a -> b -> Maybe (a :~~: b)
 (=@=) v u = eqTypeRep (ty v) (ty u)
 
+-- Helper asserting a type
+(<-@) ::Typeable a => a -> TypeRep b -> b
+(<-@) val t = case eqTypeRep t (ty val) of
+  Just HRefl -> val
+  _ -> error "Mismatching type."
+
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
   show (NdArray s v) = show s <> " " <> show v
@@ -500,23 +506,126 @@ transposePerm perm (NdArray sh v) =
         flatV = toV M.! (permuteList perm' multU)
       in v V.! flatV)
 
+-- only swaps the 'front' matrix
+swapRows :: Integer -> Integer -> NdArray -> NdArray
+swapRows r1 r2 (NdArray s v)
+  | r1 == r2 = (NdArray s v)
+  | length s < 2 = error "Too few rows to make swaps."
+  | r1 >= numRows || r2 >= numRows = error "Row index exceeds number of rows."
+  | otherwise = 
+      let
+        lenRows = fromIntegral @Integer @Int $ s !! (colI+1) 
+        rowInd1 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r1,0]
+        rowInds1 = V.iterateN lenRows succ rowInd1
+        rowInd2 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r2,0]
+        rowInds2 = V.iterateN lenRows succ rowInd2
+        row1 = V.slice rowInd1 lenRows v
+        row2 = V.slice rowInd2 lenRows v
+      in
+        NdArray s $ V.update_ v (rowInds2 V.++ rowInds1) (row1 V.++ row2)
+  where
+    colI = length s -2
+    numRows = s !! colI
+
+frontColumn :: forall a . DType a => Int -> [Integer] -> Vector a  -> Vector a
+frontColumn col s v = V.ifilter 
+    (\i _ -> i `mod` rowLen == col && i < rowLen*columns) $
+    v <-@ (typeRep @(Vector a))
+  where
+    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
+    columns = fromIntegral @Integer @Int $ s!!(length s -2)
+
+leadingDiagonal :: forall a . DType a => [Integer] -> Vector a -> Vector a
+leadingDiagonal s v = 
+  V.ifilter (\i _ -> i `mod` (rowLen+1) == 0 && i < rowLen*columns) v 
+  where
+    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
+    columns = fromIntegral @Integer @Int $ s!!(length s -2)
+
+zeroRowVec :: forall a . DType a => Int -> Vector a -> Bool
+zeroRowVec r v = 
+  let 
+    ident = DType.identity :: a 
+    (row, rest) = V.splitAt r v
+  in 
+    (not $ V.null v)        && 
+    ((V.all (==ident) row)  || 
+    (zeroRowVec r rest))
+  
+-- note applies across whole array not just front
+zeroRow :: NdArray -> Bool
+zeroRow (NdArray s v) = zeroRowVec (fromIntegral $ last s) v 
+
+-- Todo check rows for singularity too
+-- Note hangs if given a matrix with a zero-row
+swapRowsWith0Pivot :: NdArray -> Maybe NdArray
+swapRowsWith0Pivot (NdArray s v) =
+  let
+    diag = leadingDiagonal s v
+    ident = indentityElem' diag
+  in
+    case V.elemIndex ident diag of
+      -- x is the column-index of the 0 pivot
+      Just c -> case V.findIndex (/= ident) (frontColumn c s v) of
+        -- Swap 0-pivot and non-0 rows & try again
+        Just x -> swapRowsWith0Pivot $
+          swapRows (fromIntegral x) (fromIntegral c) (NdArray s v)
+        -- The matrix is singular
+        Nothing -> Nothing
+      -- There is no 0-pivot
+      Nothing -> Just (NdArray s v)
+
 -- Numpy only defines this as sets over the 2D square matricies
 -- If the matrix is non-square it is assumed to be padded out and will have det = 0
 -- https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html
-determinant :: NdArray -> [Int]
+determinant :: forall a . DType a => NdArray -> [a]
 determinant (NdArray s v) = case s of
   [] -> []
-  [x] -> [0]
-  [x,y] | x =/ y -> [0] 
-  [x,y] -> [determinant2D (NdArray s v)]
+  [_] -> [DType.identity :: a]
+  [_,_] -> [determinant2D (NdArray s v)]
   _ -> undefined
 
--- For a 2D matrix
-determinant2D :: NdArray -> Int 
-determinant2D (NdArray s v) = case s of 
-  [x,y] | x == y -> error "yes"
-  [x,y] | x =/ y -> 0
-  _ -> error "no"
+sequentialUpdate :: DType a => M.Map [Integer] Int -> Vector a -> [(Integer,Integer,Integer)] -> Vector a
+sequentialUpdate _ v [] = v
+sequentialUpdate m v ((i,j,k) : trv) =
+  let
+    jk = m M.! [j,k]
+    ratio = DType.div (vecInd m v [j,i]) (vecInd m v [i,i])
+    scaled = DType.multiply ratio (vecInd m v [i,k])
+    newVjk = DType.subtract (vecInd m v [j,k]) scaled
+  in 
+    sequentialUpdate m (v V.// [(jk, newVjk)]) trv
+
+-- For a 2D matrix using LU Decomposition as described here:
+-- https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/Makalah-Matdis-2016-051.pdf
+determinant2D :: forall a . DType a => NdArray -> a 
+determinant2D nd =
+  case shape nd of
+    [2,2] -> determinant2x2 nd
+    [c,r] | c == r && (not $ zeroRow nd) -> case swapRowsWith0Pivot nd of
+            Just (NdArray s v) ->
+              let
+                (_, fromMulti) = mapIndicies s
+                trv = [(i,j,k) | i <- [1..r], j <- [(i+1)..r], k <- [1..r]]
+                upperTriangle = sequentialUpdate fromMulti v trv
+                pivots = leadingDiagonal s upperTriangle
+              in
+                foldrArray (DType.multiply) (DType.identity :: a) (NdArray [fromIntegral $ V.length pivots] pivots)
+                            
+            Nothing -> DType.identity :: a
+    [c,r] -> DType.identity :: a
+    _ -> error "Given matrix is not 2D."
+
+-- hidden helper
+determinant2x2 :: forall a . DType a => NdArray -> a
+determinant2x2 (NdArray _ v) = 
+  let 
+    mulI i1 i2 = DType.multiply (v V.! i1) (v V.! i2)
+    det = mulI 0 3 `DType.subtract` mulI 1 2
+  in
+    det <-@ (typeRep @a)
+
+
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
