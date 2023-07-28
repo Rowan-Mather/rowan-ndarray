@@ -11,6 +11,7 @@ import NdArray
 import qualified DType
 import DType (DType)
 import MatrixForm
+import Serialisation
 
 import qualified Data.Vector.Storable as V
 import Data.Vector.Storable (Vector)
@@ -42,10 +43,6 @@ ty = typeOf
 (<-@) val t = case eqTypeRep t (ty val) of
   Just HRefl -> val
   _ -> error "Mismatching type."
-
--- Todo: show in a nicer shapely form :)
-instance Show NdArray where
-  show (NdArray s v) = show s <> " " <> show v
 
 instance Eq NdArray where
   -- | Arrays are equal if their elements and shape exactly match.
