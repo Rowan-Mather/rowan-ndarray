@@ -262,7 +262,40 @@ value for the array e.g. 0. To avoid this use !?.
         Nothing -> Nothing
     else Nothing
 
--- Todo: slicing
+slice :: [(Integer, Integer)] -> NdArray -> NdArray
+slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
+  where (m,_) = mapIndicies sh
+
+(!/) :: NdArray -> [(Integer, Integer)] -> NdArray
+(!/) nd ss = slice ss nd
+
+-- helpser
+sliceWithMap :: M.Map Int [Integer] -> Int -> [(Integer, Integer)] -> NdArray -> NdArray
+sliceWithMap _ _ [] nd = nd
+sliceWithMap _ d _ (NdArray sh v) | d >= length sh = (NdArray sh v)
+sliceWithMap m d (s : ss) (NdArray sh v) = sliceWithMap m (d+1) ss $ 
+  sliceDim s d m (NdArray sh v)
+
+-- inclusive
+sliceDim :: (Integer, Integer) -> Int -> M.Map Int [Integer] -> NdArray -> NdArray
+sliceDim (x,y) d m (NdArray s v) = 
+  if d >= length s then error "Given dimension does not exist in array."
+  else NdArray 
+    (if y < x then [] else shrinkNth d (y-x+1) s)
+    (V.ifilter 
+      (\i _ ->
+        let dimInd = (m M.! i) !! d
+        in x <= dimInd && dimInd <= y) 
+      v
+    )
+
+-- https://stackoverflow.com/questions/5852722/replace-individual-list-elements-in-haskell
+shrinkNth :: Ord a => Int -> a -> [a] -> [a]
+shrinkNth _ _ [] = []
+shrinkNth n newVal (x:xs)
+  | n == 0 = if newVal < x then newVal:xs else x:xs
+  | otherwise = x:shrinkNth (n-1) newVal xs
+
 
 -- * Pointwise Functions  -- 
 -- All the numpy-like functions not defined within the Eq, Ord or Num instances
@@ -474,8 +507,8 @@ swapRows r1 r2 (NdArray s v)
 
 {- | Gets the flat array of the leading diagonal of the 'front' matrix of the tensor. -}
 diagonal :: NdArray -> NdArray
-diagonal (NdArray s v) = NdArray [V.length v'] v'
-  v' = diagonalVec s v
+diagonal (NdArray s v) = NdArray [fromIntegral $ V.length v'] v'
+  where v' = diagonalVec s v
 
 -- Helper to take the leading diagonal in the vector form.
 diagonalVec :: forall a . DType a => [Integer] -> Vector a -> Vector a
