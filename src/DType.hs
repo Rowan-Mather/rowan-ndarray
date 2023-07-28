@@ -9,13 +9,14 @@ import GHC.Float (float2Double)
 
 -- Basis for all pointwise operations
 class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
-  identity :: a
+  addId :: a
+  multId :: a
   -- Numeric
   add :: a -> a -> a
   subtract :: a -> a -> a
   multiply :: a -> a -> a
-  divide :: a -> a -> Double
-  div :: a -> a -> a
+  divide :: a -> a -> a
+  div :: a -> a -> Integer
   power :: a -> Double -> Double
   pow :: a -> a -> a
   log :: a -> a -> a
@@ -38,13 +39,14 @@ class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
 
 
 instance DType Int where 
-  identity = 0
+  addId = 0
+  multId = 1
   -- Numeric
   add x y = x + y 
   subtract x y = x - y
   multiply x y = x * y
-  divide x y = fromIntegral x / fromIntegral y
-  div = P.div
+  divide x y = P.div x y
+  div x y = (fromIntegral $ P.div x y) :: Integer
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int
@@ -73,13 +75,14 @@ roundIntFunc f x = (round $ f $ fromIntegral @Int @Float x) :: Int
 --instance DType Int64 where
 
 instance DType Float where 
-  identity = 0.0
+  addId = 0.0
+  multId = 1.0
   -- Numeric
   add x y = x + y 
   subtract x y = x - y
   multiply x y = x * y
-  divide x y = float2Double (x / y)
-  div x y = fromIntegral (P.floor x `P.div` P.floor y) :: Float
+  divide x y = x/y
+  div x y = P.floor x `P.div` P.floor y
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
@@ -104,13 +107,14 @@ instance DType Float where
 --instance DType Double
 
 instance DType Bool where 
-  identity = False
+  addId = False
+  multId = True
     -- Numeric
   add x y = x || y
   subtract x y = (x || y) && not (x && y)
   multiply x y = x && y
-  divide _x _y = undefined
-  div x y = not (x && y)
+  divide x y = not (x && y)
+  div x y = 0
   power _x _d = undefined
   pow x y = toEnum (fromEnum x ^ fromEnum y)
   log _x _y = undefined
