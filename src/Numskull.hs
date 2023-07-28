@@ -100,6 +100,9 @@ size sh = (fromIntegral $ product sh) :: Int
 shape :: NdArray -> [Integer]
 shape (NdArray s _) = s
 
+getVector :: forall a . DType a => NdArray -> Vector a
+getVector (NdArray _ v) = v <-@ typeRep @(Vector a)
+
 -- | Gets the TypeRep for the NdArray elements
 ndType :: forall a . DType a => NdArray -> TypeRep a
 ndType (NdArray _ v) = case v =@= (undefined :: Vector a) of 
@@ -266,14 +269,22 @@ value for the array e.g. 0. To avoid this use !?.
 
 ----- One Argument
 
+{- | Near identical to a standard foldr instance, expect NdArrays do not have an explicit type. 
+Folds in row-major order.
+-}
+foldrA :: forall a b . DType a => (a -> b -> b) -> b -> NdArray -> b
+foldrA f z (NdArray _ v) = 
+  case v =@= (undefined :: Vector a) of
+    Just HRefl -> V.foldr f z v
+    _ -> error "Starting value type does not match array type."
+
+-- | Near identical to a standard map implementation in row-major order.
 mapA :: forall a . forall b . (DType a, DType b) => (a -> b) -> NdArray -> NdArray
 mapA f (NdArray s v) = case v =@= (undefined :: Vector a) of 
   Just HRefl -> NdArray s (V.map f v)
   _ -> error "Function input does not match array type."
 
---mapA :: (forall a . forall b . (DType a, DType b) => a -> b) -> NdArray -> NdArray
---mapA f (NdArray s v) = NdArray s (V.map f v)
-
+-- | Maps functions which return the same type.
 mapTransform :: (forall a . DType a => a -> a) -> NdArray -> NdArray
 mapTransform f (NdArray s v) = NdArray s (V.map f v)
 
@@ -436,6 +447,81 @@ padShape r (NdArray s v) =
 
 -- * Matrix Operations
 
+-- ROWS, COLUMNS & DIAGONALS
+
+{- | Switches the rows at the two given indicies over. 
+NB: designed for 2x2 matricies so will only make swaps in the 'front' matrix of a tensor.
+-}
+swapRows :: Integer -> Integer -> NdArray -> NdArray
+swapRows r1 r2 (NdArray s v)
+  | r1 == r2 = (NdArray s v)
+  | length s < 2 = error "Too few rows to make swaps."
+  | r1 >= numRows || r2 >= numRows = error "Row index exceeds number of rows."
+  | otherwise = 
+      let
+        lenRows = fromIntegral @Integer @Int $ s !! (colI+1) 
+        rowInd1 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r1,0]
+        rowInds1 = V.iterateN lenRows succ rowInd1
+        rowInd2 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r2,0]
+        rowInds2 = V.iterateN lenRows succ rowInd2
+        row1 = V.slice rowInd1 lenRows v
+        row2 = V.slice rowInd2 lenRows v
+      in
+        NdArray s $ V.update_ v (rowInds2 V.++ rowInds1) (row1 V.++ row2)
+  where
+    colI = length s -2
+    numRows = s !! colI
+
+{- | Gets the flat array of the leading diagonal of the 'front' matrix of the tensor. -}
+diagonal :: NdArray -> NdArray
+diagonal (NdArray s v) = NdArray [V.length v'] v'
+  v' = diagonalVec s v
+
+-- Helper to take the leading diagonal in the vector form.
+diagonalVec :: forall a . DType a => [Integer] -> Vector a -> Vector a
+diagonalVec s v = 
+  V.ifilter (\i _ -> i `mod` (rowLen+1) == 0 && i < rowLen*columns) v 
+  where
+    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
+    columns = fromIntegral @Integer @Int $ s!!(length s -2)
+
+-- TRANSPOSITION
+
+-- | Reverses the order of axes and switches the elements accordingly.
+transpose :: NdArray -> NdArray
+transpose (NdArray sh v) = transposePerm [length sh -1..0] (NdArray sh v)
+
+-- | Transposes the axes of an array according to the given permutation (e.g. [2,0,1])
+transposePerm :: [Int] -> NdArray -> NdArray
+transposePerm perm (NdArray sh v) =
+  let 
+    sh' = permuteList perm sh
+    perm' = invertPermutation perm
+    (_, toV) = mapIndicies sh
+    (fromU, _) = mapIndicies sh'
+    sz = V.length v
+  in NdArray sh' $ V.generate sz (\i -> 
+      let 
+        multU = fromU M.! i
+        flatV = toV M.! (permuteList perm' multU)
+      in v V.! flatV)
+
+-- Applies a permutation to a list
+permuteList :: [Int] -> [a] -> [a]
+permuteList perm l = if sort perm /= [0 .. length l -1] 
+  then error "Invalid permutation given."
+  else map (l!!) perm
+
+-- Finds the inverse of a permutation
+invertPermutation :: [Int] -> [Int]
+invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm -1]
+
+-- MULTIPLICATION
+
+-- | Dot product over matricies of the same shape.
+dot :: DType a => NdArray -> NdArray -> a
+dot nd1 nd2 = foldrA (DType.add) (DType.addId) (nd1*nd2)
+
 -- For now, just nxm and mxp = nxp
 matMul :: NdArray -> NdArray -> NdArray
 matMul (NdArray s v) (NdArray r u) =
@@ -469,79 +555,84 @@ matMulElem map1 map2 ks (i:j:_) =
   foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.addId ks
     --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
 
-foldrArray :: forall a b . DType a => (a -> b -> b) -> b -> NdArray -> b
-foldrArray f z (NdArray _ v) = 
-  case v =@= (undefined :: Vector a) of
-    Just HRefl -> V.foldr f z v
-    _ -> error "Starting value type does not match array type."
+-- DETERMINANTS & INVERSES
 
-dot :: DType a => NdArray -> NdArray -> a
-dot nd1 nd2 = foldrArray (DType.add) (DType.addId) (nd1*nd2)
+-- | Converts a nxn matrix to upper triangle form. O(n^3).
+upperTriangle :: NdArray -> NdArray
+upperTriangle (NdArray (c:rs) v) = 
+  let
+    (_, fromMulti) = mapIndicies (c:rs)
+    traversals = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
+  in 
+    NdArray (c:rs) $ triangulateVec fromMulti v traversals (indentityElem' v)
 
--- reverse the order of axes
-transpose :: NdArray -> NdArray
-transpose = undefined
+-- Upper triangle form on the hidden vector.
+triangulateVec :: DType a => M.Map [Integer] Int -> Vector a -> [(Integer,Integer,Integer)] -> a -> Vector a
+triangulateVec _ v [] _ = v
+triangulateVec m v ((i,j,k) : trv) r =
+  let
+    jk = m M.! [j,k]
+    ratio = if k == 0 then DType.divide (vecInd m v [j,i]) (vecInd m v [i,i]) else r
+    scaled = DType.multiply ratio (vecInd m v [i,k])
+    newVjk = DType.subtract (vecInd m v [j,k]) scaled
+  in 
+    triangulateVec m (v V.// [(jk, newVjk)]) trv ratio
 
--- Helper applies a permutation to a list
-permuteList :: [Int] -> [a] -> [a]
-permuteList perm l = if sort perm /= [0 .. length l -1] 
-  then error "Invalid permutation given."
-  else map (l!!) perm
+{- | Finds the determinant(s) of a tensor. Over matricies of more than two dimensions
+each 2D matrix's determinant is individually calculated and concatenated together (as in numpy:
+https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html ).
+If the matrix is non-square it is assumed to be padded out and will have determinant of 0
+-}
+determinant :: forall a . DType a => NdArray -> [a]
+determinant (NdArray s v) = case s of
+  [] -> []
+  [_] -> [DType.addId :: a]
+  [_,_] -> [determinant2D (NdArray s v)]
+  _ | V.null v -> []
+  _ -> 
+    let 
+      (c,r) = (s!!(length s -2), last s)
+      (twoDim, rest) = V.splitAt (fromIntegral$c*r) v
+    in (determinant2D (NdArray [c,r] twoDim) : determinant (NdArray s rest))
 
--- Helper which finds the inverse of a permutation
-invertPermutation :: [Int] -> [Int]
-invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm -1]
+{- | Calculates the determinant of a 2D matrix using LU decomposition as described in the 
+below paper. O(n^3).
+https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/Makalah-Matdis-2016-051.pdf
+-}
+determinant2D :: forall a . DType a => NdArray -> a
+determinant2D nd =
+  case shape nd of
+    -- 2x2 matricies are calculated quickly with the standard ad-bc
+    [2,2] -> determinant2x2 nd
+    -- nxn matricies are row-swapped to find an arrangement with no zeros/identity elements
+    -- in the leading diagonal (pivots) then put into upper triangle form
+    [c,r] | c == r && (not $ zeroRow nd) -> case swapRowsWith0Pivot nd of
+            Just (NdArray s v) ->
+              let
+                upperTri = upperTriangle (NdArray s v)
+                upperTriV = getVector upperTri :: Vector a 
+                pivots = diagonalVec s upperTriV
+              in
+                -- determinant is the product of the pivots in upper triangle form
+                V.foldr (DType.multiply) (DType.multId :: a) pivots
+    -- If the matrix is non-square or has a zero-row/column, it is singular.
+            Nothing -> DType.addId
+    [_,_] -> DType.addId
+    _ -> error "Given matrix is not 2D."
 
--- | Transposes the axes of an array according to the given permutation (e.g. [2,0,1])
-transposePerm perm (NdArray sh v) =
+-- 2x2 quick determinant calculation of ad-bc
+determinant2x2 :: forall a . DType a => NdArray -> a
+determinant2x2 (NdArray _ v) = 
   let 
-    sh' = permuteList perm sh
-    perm' = invertPermutation perm
-    (_, toV) = mapIndicies sh
-    (fromU, _) = mapIndicies sh'
-    sz = V.length v
-  in NdArray sh' $ V.generate sz (\i -> 
-      let 
-        multU = fromU M.! i
-        flatV = toV M.! (permuteList perm' multU)
-      in v V.! flatV)
+    mulI i1 i2 = DType.multiply (v V.! i1) (v V.! i2)
+    det = mulI 0 3 `DType.subtract` mulI 1 2
+  in det <-@ (typeRep @a)
+  
+-- | Checks the whole array for the prescence of a zero-row.
+zeroRow :: NdArray -> Bool
+zeroRow (NdArray s v) = zeroRowVec (fromIntegral $ last s) v 
 
--- only swaps the 'front' matrix
-swapRows :: Integer -> Integer -> NdArray -> NdArray
-swapRows r1 r2 (NdArray s v)
-  | r1 == r2 = (NdArray s v)
-  | length s < 2 = error "Too few rows to make swaps."
-  | r1 >= numRows || r2 >= numRows = error "Row index exceeds number of rows."
-  | otherwise = 
-      let
-        lenRows = fromIntegral @Integer @Int $ s !! (colI+1) 
-        rowInd1 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r1,0]
-        rowInds1 = V.iterateN lenRows succ rowInd1
-        rowInd2 = fromIntegral @Integer @Int $ collapseInd s $ replicate colI 0 ++ [r2,0]
-        rowInds2 = V.iterateN lenRows succ rowInd2
-        row1 = V.slice rowInd1 lenRows v
-        row2 = V.slice rowInd2 lenRows v
-      in
-        NdArray s $ V.update_ v (rowInds2 V.++ rowInds1) (row1 V.++ row2)
-  where
-    colI = length s -2
-    numRows = s !! colI
-
-frontColumn :: forall a . DType a => Int -> [Integer] -> Vector a  -> Vector a
-frontColumn col s v = V.ifilter 
-    (\i _ -> i `mod` rowLen == col && i < rowLen*columns) $
-    v <-@ (typeRep @(Vector a))
-  where
-    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
-    columns = fromIntegral @Integer @Int $ s!!(length s -2)
-
-leadingDiagonal :: forall a . DType a => [Integer] -> Vector a -> Vector a
-leadingDiagonal s v = 
-  V.ifilter (\i _ -> i `mod` (rowLen+1) == 0 && i < rowLen*columns) v 
-  where
-    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
-    columns = fromIntegral @Integer @Int $ s!!(length s -2)
-
+-- Checks the array in vector form for a zero-row.
 zeroRowVec :: forall a . DType a => Int -> Vector a -> Bool
 zeroRowVec r v = 
   let 
@@ -551,17 +642,15 @@ zeroRowVec r v =
     (not $ V.null v)        && 
     ((V.all (==ident) row)  || 
     (zeroRowVec r rest))
-  
--- note applies across whole array not just front
-zeroRow :: NdArray -> Bool
-zeroRow (NdArray s v) = zeroRowVec (fromIntegral $ last s) v 
 
--- Todo check rows for singularity too
--- Note hangs if given a matrix with a zero-row
+{- Repeatedly swaps rows until the matrix is found to be singular or
+there are no pivots which are zero/identity elem. If singular, returns Nothing.
+Note: hangs if given a matrix with a zero-row.
+-}
 swapRowsWith0Pivot :: NdArray -> Maybe NdArray
 swapRowsWith0Pivot (NdArray s v) =
   let
-    diag = leadingDiagonal s v
+    diag = diagonalVec s v
     ident = indentityElem' diag
   in
     case V.elemIndex ident diag of
@@ -575,66 +664,14 @@ swapRowsWith0Pivot (NdArray s v) =
       -- There is no 0-pivot
       Nothing -> Just (NdArray s v)
 
--- Numpy only defines this as sets over the 2D square matricies
--- If the matrix is non-square it is assumed to be padded out and will have det = 0
--- https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html
-{-}
-determinant :: forall a . DType a => NdArray -> [a]
-determinant (NdArray s v) = case s of
-  [] -> []
-  [_] -> [DType.addId :: a]
-  [_,_] -> [determinant2D (NdArray s v)]
-  _ -> undefined
--}
-
-upperTriangle :: NdArray -> NdArray
-upperTriangle (NdArray s v) = 
-  let
-    (_, fromMulti) = mapIndicies s
-    traversals = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
-  in 
-    sequentialUpdate fromMulti v trv (indentityElem' v)
-
-sequentialUpdate :: DType a => M.Map [Integer] Int -> Vector a -> [(Integer,Integer,Integer)] -> a -> Vector a
-sequentialUpdate _ v [] _ = v
-sequentialUpdate m v ((i,j,k) : trv) r =
-  let
-    jk = m M.! [j,k]
-    ratio = if k == 0 then DType.divide (vecInd m v [j,i]) (vecInd m v [i,i]) else r
-    scaled = DType.multiply ratio (vecInd m v [i,k])
-    newVjk = DType.subtract (vecInd m v [j,k]) scaled
-  in 
-    sequentialUpdate m (v V.// [(jk, newVjk)]) trv ratio
-
--- For a 2D matrix using LU Decomposition as described here:
--- https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/Makalah-Matdis-2016-051.pdf
-determinant2D :: forall a . DType a => NdArray -> a
-determinant2D nd =
-  case shape nd of
-    [2,2] -> DType.addId
-    [c,r] | c == r && (not $ zeroRow nd) -> case swapRowsWith0Pivot nd of
-            Just (NdArray s v) ->
-              let
-                (_, fromMulti) = mapIndicies s
-                trv = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
-                upperTriangle = sequentialUpdate fromMulti v trv (indentityElem' v)
-                pivots = (leadingDiagonal s upperTriangle) <-@ typeRep @(Vector a)
-              in
-                V.foldr (DType.multiply) (DType.multId :: a) pivots
-            Nothing -> DType.addId
-    [_,_] -> DType.addId
-    _ -> error "Given matrix is not 2D."
-
--- hidden helper
-determinant2x2 :: forall a . DType a => NdArray -> a
-determinant2x2 (NdArray _ v) = 
-  let 
-    mulI i1 i2 = DType.multiply (v V.! i1) (v V.! i2)
-    det = mulI 0 3 `DType.subtract` mulI 1 2
-  in
-    det <-@ (typeRep @a)
-
-
+{- Extracts the indexed column from the front matrix of a tensor given its shape and vector. -}
+frontColumn :: forall a . DType a => Int -> [Integer] -> Vector a  -> Vector a
+frontColumn col s v = V.ifilter 
+    (\i _ -> i `mod` rowLen == col && i < rowLen*columns) $
+    v <-@ (typeRep @(Vector a))
+  where
+    rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
+    columns = fromIntegral @Integer @Int $ s!!(length s -2)
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
