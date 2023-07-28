@@ -6,7 +6,6 @@
 
 module Serialisation where
 
-import Numskull
 import DType
 import NdArray
 
@@ -25,7 +24,7 @@ import Data.Word (Word16)
 
 -- | Built in numpy serialisation descriptions
 getNumpyDType :: NdArray -> String
-getNumpyDType (NdArray _ v) = case show $ ty v of
+getNumpyDType (NdArray _ v) = case show $ typeOf v of
   "Vector Int"      -> "<i8"
   "Vector Int32"    -> "<i4"
   "Vector Integer"  -> "<i8"
