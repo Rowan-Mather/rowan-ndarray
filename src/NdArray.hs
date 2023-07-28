@@ -11,3 +11,7 @@ import Data.Vector.Storable
 -- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
 data NdArray where
   NdArray :: DType a => [Integer] -> Vector a -> NdArray
+
+-- Todo: show in a nicer shapely form :)
+instance Show NdArray where
+  show (NdArray s v) = show s <> " " <> show v
