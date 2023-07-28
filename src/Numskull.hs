@@ -115,7 +115,7 @@ indentityElem = undefined
 
 -- Helper for the vectors in identityElem
 indentityElem' :: forall a . DType a => Vector a -> a
-indentityElem' _ = DType.identity :: DType a => a
+indentityElem' _ = DType.addId :: DType a => a
 
 -- | Creates an NdArray from a given shape and list. The number of elements must match.
 -- >>> printArray $ fromList [2,2] [1,2,3,4::Int]
@@ -161,7 +161,7 @@ squareArr = undefined
 zeros :: forall a . DType a => TypeRep a -> [Integer] -> NdArray
 zeros _ s = NdArray s zerovec
   where
-    ident = (DType.identity :: DType a => a)
+    ident = (DType.addId :: DType a => a)
     zerovec = (V.replicate (size s) ident) :: DType a => Vector a
 
 
@@ -237,7 +237,7 @@ value for the array e.g. 0. To avoid this use !?.
 (#!) :: DType a => NdArray -> [Integer] -> a
 (NdArray s v) #! i = case (NdArray s v) !? i of
   Just val -> val
-  Nothing -> DType.identity :: DType a => a
+  Nothing -> DType.addId :: DType a => a
 
 {- | The safer version of #! which returns Nothing if an index exceeds the shape bounds. -}
 -- >>> m = fromListFlat [2,4,8 :: Int]
@@ -329,9 +329,9 @@ pointwiseZip zipfunc (NdArray s v) (NdArray r u) = if s == r then
 --elemDivide :: NdArray -> NdArray -> NdArray
 --elemDivide = pointwiseZip divide
 
--- | Pointwise integer division
-elemDiv :: NdArray -> NdArray -> NdArray
-elemDiv = pointwiseZip DType.div
+-- | Pointwise division
+elemDivide :: NdArray -> NdArray -> NdArray
+elemDivide = pointwiseZip DType.divide
 
 -- Todo: Needs to operate on doubles
 --elemPower :: NdArray -> NdArray -> NdArray
@@ -379,7 +379,7 @@ constrainSize s v =
 
 -- Fill out any spaces in a vector smaller than the shape with 0s (or whatever the dtype 'identity' is)
 padSize :: DType a => Integer -> Vector a -> Vector a
-padSize s v = v V.++ V.replicate ((fromIntegral s ::Int) - len) DType.identity
+padSize s v = v V.++ V.replicate ((fromIntegral s ::Int) - len) DType.addId
   where len = V.length v
 
 -- Contrain or pad the vector to match the size
@@ -466,7 +466,7 @@ matMulVec s v r u =
 matMulElem :: DType a =>
   ([Integer] -> a) -> ([Integer] -> a) -> [Integer] -> [Integer] -> a
 matMulElem map1 map2 ks (i:j:_) =
-  foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.identity ks
+  foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.addId ks
     --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
 
 foldrArray :: forall a b . DType a => (a -> b -> b) -> b -> NdArray -> b
@@ -476,7 +476,7 @@ foldrArray f z (NdArray _ v) =
     _ -> error "Starting value type does not match array type."
 
 dot :: DType a => NdArray -> NdArray -> a
-dot nd1 nd2 = foldrArray (DType.add) (DType.identity) (nd1*nd2)
+dot nd1 nd2 = foldrArray (DType.add) (DType.addId) (nd1*nd2)
 
 -- reverse the order of axes
 transpose :: NdArray -> NdArray
@@ -545,7 +545,7 @@ leadingDiagonal s v =
 zeroRowVec :: forall a . DType a => Int -> Vector a -> Bool
 zeroRowVec r v = 
   let 
-    ident = DType.identity :: a 
+    ident = DType.addId :: a 
     (row, rest) = V.splitAt r v
   in 
     (not $ V.null v)        && 
@@ -578,42 +578,51 @@ swapRowsWith0Pivot (NdArray s v) =
 -- Numpy only defines this as sets over the 2D square matricies
 -- If the matrix is non-square it is assumed to be padded out and will have det = 0
 -- https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html
+{-}
 determinant :: forall a . DType a => NdArray -> [a]
 determinant (NdArray s v) = case s of
   [] -> []
-  [_] -> [DType.identity :: a]
+  [_] -> [DType.addId :: a]
   [_,_] -> [determinant2D (NdArray s v)]
   _ -> undefined
+-}
 
-sequentialUpdate :: DType a => M.Map [Integer] Int -> Vector a -> [(Integer,Integer,Integer)] -> Vector a
-sequentialUpdate _ v [] = v
-sequentialUpdate m v ((i,j,k) : trv) =
+upperTriangle :: NdArray -> NdArray
+upperTriangle (NdArray s v) = 
+  let
+    (_, fromMulti) = mapIndicies s
+    traversals = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
+  in 
+    sequentialUpdate fromMulti v trv (indentityElem' v)
+
+sequentialUpdate :: DType a => M.Map [Integer] Int -> Vector a -> [(Integer,Integer,Integer)] -> a -> Vector a
+sequentialUpdate _ v [] _ = v
+sequentialUpdate m v ((i,j,k) : trv) r =
   let
     jk = m M.! [j,k]
-    ratio = DType.div (vecInd m v [j,i]) (vecInd m v [i,i])
+    ratio = if k == 0 then DType.divide (vecInd m v [j,i]) (vecInd m v [i,i]) else r
     scaled = DType.multiply ratio (vecInd m v [i,k])
     newVjk = DType.subtract (vecInd m v [j,k]) scaled
   in 
-    sequentialUpdate m (v V.// [(jk, newVjk)]) trv
+    sequentialUpdate m (v V.// [(jk, newVjk)]) trv ratio
 
 -- For a 2D matrix using LU Decomposition as described here:
 -- https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/Makalah-Matdis-2016-051.pdf
-determinant2D :: forall a . DType a => NdArray -> a 
+determinant2D :: forall a . DType a => NdArray -> a
 determinant2D nd =
   case shape nd of
-    [2,2] -> determinant2x2 nd
+    [2,2] -> DType.addId
     [c,r] | c == r && (not $ zeroRow nd) -> case swapRowsWith0Pivot nd of
             Just (NdArray s v) ->
               let
                 (_, fromMulti) = mapIndicies s
-                trv = [(i,j,k) | i <- [1..r], j <- [(i+1)..r], k <- [1..r]]
-                upperTriangle = sequentialUpdate fromMulti v trv
-                pivots = leadingDiagonal s upperTriangle
+                trv = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
+                upperTriangle = sequentialUpdate fromMulti v trv (indentityElem' v)
+                pivots = (leadingDiagonal s upperTriangle) <-@ typeRep @(Vector a)
               in
-                foldrArray (DType.multiply) (DType.identity :: a) (NdArray [fromIntegral $ V.length pivots] pivots)
-                            
-            Nothing -> DType.identity :: a
-    [c,r] -> DType.identity :: a
+                V.foldr (DType.multiply) (DType.multId :: a) pivots
+            Nothing -> DType.addId
+    [_,_] -> DType.addId
     _ -> error "Given matrix is not 2D."
 
 -- hidden helper
@@ -640,3 +649,15 @@ ndt2 :: NdArray
 ndt2 = fromList [2,3] [0,2,4,6,8,10::Int]
 
 nd3 = fromList [2,2] [1,2,3,4 :: Int]
+
+nd4 = fromList [3,3] [2,5,1, 9,2,7, 4,16,3 ::Float] 
+-- det = -71
+{-
+ 1  0  0     2  5  1
+9/2 1  0  x  0  s 5/2 
+ 2  t  1     0  0 71/41
+
+t = -12/41
+s = -41/2
+-} 
+
