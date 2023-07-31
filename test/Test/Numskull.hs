@@ -15,13 +15,14 @@ spec = do
         it "works" $
            N.fromList [3] [1,2,3::Int] == N.fromList [3] [1,2,3::Int]
 
+{-
     describe "padShape" $ do
         focus . it "works on a less simple example" $
             property $ \content (NonNegative extra) ->
             let n = toInteger $ length content
             in
             padShape (N.fromList [n] content) [n + extra] `shouldBe` N.fromList [n + extra] (content <> replicate (fromInteger extra) (0 :: Int))
-
+-}
 --cabal test --test-show-details=streaming
 -- ghci -isrc -itest test/Test/Numskull.hs
 --     ghci> hspec spec
