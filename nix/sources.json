@@ -11,6 +11,18 @@
         "url": "https://github.com/clash-lang/clash-compiler/archive/fa01fd98799cd7c00cae44a9df847142410f1618.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
+    "dense": {
+        "branch": "master",
+        "description": "dense Haskell library",
+        "homepage": "",
+        "owner": "cchalmers",
+        "repo": "dense",
+        "rev": "6eced9f5a3ab6b5026fe4f7ab4f67a8bce4d6262",
+        "sha256": "1v8nx36f8yhifn8jcv24jjwm2msnhg8lx5wji28ci9vr0swq72ly",
+        "type": "tarball",
+        "url": "https://github.com/cchalmers/dense/archive/6eced9f5a3ab6b5026fe4f7ab4f67a8bce4d6262.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "niv": {
         "branch": "master",
         "description": "Easy dependency management for Nix projects",
@@ -24,15 +36,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
-        "branch": "nixos-20.09",
+        "branch": "nixos-23.05",
         "description": "Nix Packages collection",
         "homepage": "https://github.com/NixOS/nixpkgs",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "896270d629efd47d14972e96f4fbb79fc9f45c80",
-        "sha256": "0xmjjayg19wm6cn88sh724mrsdj6mgrql6r3zc0g4x9bx4y342p7",
+        "rev": "8163a64662b43848802092d52015ef60777d6129",
+        "sha256": "12dlinlsmn9m4597bbyd9wjlsi5n1fd33kwrlf5v8n9357cciq54",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/896270d629efd47d14972e96f4fbb79fc9f45c80.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/8163a64662b43848802092d52015ef60777d6129.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "revealjs": {
