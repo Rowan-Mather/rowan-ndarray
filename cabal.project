@@ -1,0 +1,6 @@
+packages: .
+
+source-repository-package
+  type: git
+  location: https://github.com/cchalmers/dense.git
+  tag: 6eced9f5a3ab6b5026fe4f7ab4f67a8bce4d6262

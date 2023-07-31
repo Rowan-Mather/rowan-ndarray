@@ -13,6 +13,9 @@ these will be inferred at runtime from the contents of the array
     e. Bool
     f. Char
     g. Byte?
+2.1)?
+    a. date
+    b. complex
 3) Support more Myrtle-specfic types, from Torch? https://hasktorch.github.io/hasktorch/html/Torch-DType.html
     a. BFloat16
     b. QInt32

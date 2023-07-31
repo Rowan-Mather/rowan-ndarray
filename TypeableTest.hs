@@ -42,8 +42,6 @@ newtype NDArray a = NDArray (R.Array U s t)
 
 --t = NDArray (fromListUnboxed (Z :. (3::Int) :. (3::Int)) [1..9::Int])
 
---dynTypeRep (toDyn 4) == dynTypeRep (toDyn 2)
---DArray a + NDArray b =
 
 
 
