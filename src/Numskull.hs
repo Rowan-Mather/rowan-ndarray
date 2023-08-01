@@ -92,6 +92,17 @@ ndType (NdArray _ v) = case v =@= (undefined :: Vector a) of
 vecType :: forall a . DType a => Vector a -> TypeRep a
 vecType _ = typeRep @a
 
+-- | Convert a list of arrays to a list of vectors, provided they are all of the specified type.
+extractVectors :: forall a . DType a => [NdArray] -> TypeRep a -> Maybe [Vector a]
+extractVectors [] _ = Just []
+extractVectors ((NdArray s v) : nds) t = 
+  case v =@= (undefined :: Vector a) of
+    Just HRefl -> 
+      case extractVectors nds t of 
+        Just vs -> Just (v:vs)
+        _ -> Nothing
+    Nothing -> Nothing
+
 -- Todo: get the ident of the dtype from an nd array
 indentityElem = undefined
 
@@ -145,7 +156,6 @@ zeros _ s = NdArray s zerovec
   where
     ident = (DType.addId :: DType a => a)
     zerovec = (V.replicate (size s) ident) :: DType a => Vector a
-
 
 -- * Pointwise Functions  -- 
 -- All the numpy-like functions not defined within the Eq, Ord or Num instances
@@ -203,6 +213,15 @@ shiftleft = mapTransform (DType.shiftleft)
 
 shiftright :: NdArray -> NdArray
 shiftright = mapTransform (DType.shiftright)
+
+origin :: forall a . DType a => NdArray -> a
+origin (NdArray s v) = (v V.! 0) <-@ typeRep @a
+
+maxElem :: forall a . DType a => NdArray -> a
+maxElem nd = foldrA max (origin nd) nd
+
+minElem :: forall a . DType a => NdArray -> a
+minElem nd = foldrA min (origin nd) nd
 
 ----- Two Arguments
 
@@ -374,6 +393,7 @@ padRepeats newshape oneDmap s v =
         flatWrap = multiMap M.! multiWrap -- collapse the index over the vector
     in v V.! flatWrap) 
 
+{-
 identifyCommon :: forall a . Eq a => [[a]] -> Maybe [(Int, a)]
 identifyCommon [] = Nothing
 identifyCommon (x : xs) =
@@ -385,40 +405,35 @@ identifyCommon (x : xs) =
     case common of
       Just c | length c < n-1 -> Nothing
       otherwise -> common
+-}
 
 -- Concatenate a list of tensors into a single tensor. All input tensors must have the#
 -- same shape, except for the dimension size of the axis to concatenate on.
-concatenateAlong [] _ = Nothing
-concatenateAlong [nd] _ = Just nd
-concatenateAlong ((NdArray s v):nds) axis =
-  let 
-    maybeVs = extractVectors ((NdArray s v):nds) (vecType v)
-  in 
-    case maybeVs of 
-      Nothing -> Nothing 
-      Just vs ->
-        case concatAlongVec vs (map shape ((NdArray s v):nds)) axis of 
-          Just (ns, c) -> Just $ NdArray ns c
+concatAlong [] _ = Nothing
+concatAlong [nd] _ = Just nd
+concatAlong ((NdArray s v):nds) axis =
+  case extractVectors ((NdArray s v):nds) (vecType v) of 
+    Nothing -> Nothing
+    Just vs -> 
+      case concatAlongVec vs (map shape ((NdArray s v):nds)) axis of 
           Nothing -> Nothing
+          Just (ns, c) -> Just $ NdArray ns c
 
-extractVectors :: forall a . DType a => [NdArray] -> TypeRep a -> Maybe [Vector a]
-extractVectors [] _ = Just []
-extractVectors ((NdArray s v) : nds) t = 
-  case v =@= (undefined :: Vector a) of
-    Just HRefl -> 
-      case extractVectors nds t of 
-        Just vs -> Just (v:vs)
-        _ -> Nothing
-    Nothing -> Nothing 
-
+{- Converts the dimension of each sub-array at the axis to a mapping from 
+an index along this axis in the new array to the sub array it corresponds to.-}
+--plotArrays :: [Integer] -> 
+--plotArrays dims = 
+--  concat $ zipWith (\arr dim -> [(arr, x) | x <- [0..dim]]) [0..] dims
+  
 --concatenateAlong nds axis = case identifyCommon shapes of 
+{-
 concatAlongVec :: forall a . DType a => [Vector a] -> [[Integer]] -> Int -> Maybe ([Integer], Vector a)
 concatAlongVec vs shs axis = case identifyCommon shs of 
   Nothing -> Nothing
   Just c ->
       if 0 <= axis && axis < n
       then if (length c == n) || (length c == n-1 && not (elem axis (map fst c))) 
-        then 
+        then
           let
             concatIndicies = map (!! axis) shs -- axis can actually be concatenated along
             concatSize = sum concatIndicies 
@@ -431,7 +446,6 @@ concatAlongVec vs shs axis = case identifyCommon shs of
             multiMaps = map (\x -> snd $ mapIndicies x) shs
           in 
           --in Just newshape
-  
             Just (newshape, V.generate (fromIntegral $ product newshape) (\i -> 
               let 
                 multiI = oneDmap M.! i
@@ -449,14 +463,60 @@ concatAlongVec vs shs axis = case identifyCommon shs of
   where
     base = head shs
     n = length $ base
+-}
+
+concatAlongVec :: forall a . DType a => [Vector a] -> [[Integer]] -> Int -> Maybe ([Integer], Vector a)
+concatAlongVec vs shs axis = 
+  if not (checkShapeLengths shs) || not (checkAxis axis shs) then Nothing
+  else 
+    let 
+      axDim = axisDimensions axis shs
+      newshape = replaceNth axis (sum axDim) (head shs)
+      -- first is sub-array number, second is sub-array index
+      arrayPlot = concat $ zipWith (\arr dim -> [(arr, x) | x <- [0..dim-1]]) [0..] axDim 
+      (newMultiInds, _) = mapIndicies newshape
+      subArrayMaps = map (\x -> snd $ mapIndicies x) shs
+    in 
+      Just (newshape,
+        V.generate (length newMultiInds) (\i ->
+          let 
+            multiI = newMultiInds M.! i
+            (arrayNo, arrayAxInd) = arrayPlot !! (fromIntegral $ multiI !! axis)
+            array = vs !! arrayNo
+            arrayMap = subArrayMaps !! arrayNo
+            arrayMultiI = replaceNth axis arrayAxInd multiI
+          in 
+            --arrayNo
+            vecInd arrayMap array arrayMultiI <-@ typeRep @(a)
+        ) 
+      )
 
 replaceNth n x l = take n l ++ [x] ++ drop (n+1) l
 
+-- same number of dimensions
+checkShapeLengths :: [[Integer]] -> Bool
+checkShapeLengths [] = False
+checkShapeLengths shapes = (filter (\sh -> length sh /= baseLen) shapes) == []
+  where baseLen = length $ head shapes
+
+-- dimensions are the same save perhaps the axis one
+checkAxis :: Int -> [[Integer]] -> Bool
+checkAxis _ [] = False
+checkAxis axis shapes = 
+  let 
+    dropAxis = map (\sh -> take axis sh ++ drop (axis+1) sh) shapes
+    base = head dropAxis
+  in 0 <= axis && axis <= length base && (foldr intersect base dropAxis) == base
+
+-- gets the size of the dimension of the axis over all the shapes
+axisDimensions :: Int -> [[Integer]] -> [Integer]
+axisDimensions axis shapes = map (!! axis) shapes
+
 ctest = concatAlongVec [V.fromList [1..6::Int], V.fromList [11..16::Int], V.fromList [101..108::Int]] [[2,3], [2,3], [2,4]] 1
-dtest = concatenateAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
+dtest = concatAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
 
 gather :: NdArray -> [Integer] -> Integer -> NdArray
-gather nd is axis = fromJust $ concatenateAlong (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) ax
+gather nd is axis = fromJust $ concatAlong (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) ax
   where
     ax = fromIntegral axis
     sliceLead = replicate ax (0,-1)
