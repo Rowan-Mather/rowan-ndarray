@@ -20,7 +20,7 @@ import Data.Vector.Storable (Vector)
 import Type.Reflection
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
-import Data.List (sort, elemIndex)
+import Data.List (sort, elemIndex, intersect)
 
 -- $setup
 -- >>> import Numskull as N
@@ -374,10 +374,100 @@ padRepeats newshape oneDmap s v =
         flatWrap = multiMap M.! multiWrap -- collapse the index over the vector
     in v V.! flatWrap) 
 
+identifyCommon :: forall a . Eq a => [[a]] -> Maybe [(Int, a)]
+identifyCommon [] = Nothing
+identifyCommon (x : xs) =
+  let 
+    n = length x
+    indexed = traverse (\y -> if length y == n then Just (zip [(0::Int)..] y) else Nothing) (x:xs) :: Maybe [[(Int, a)]]
+    common = fmap (foldr intersect (head $ fromJust indexed)) indexed
+  in
+    case common of
+      Just c | length c < n-1 -> Nothing
+      otherwise -> common
+
 -- Concatenate a list of tensors into a single tensor. All input tensors must have the#
 -- same shape, except for the dimension size of the axis to concatenate on.
-concat :: [NdArray] -> Integer -> Maybe NdArray
-concat = undefined
+concatenateAlong [] _ = Nothing
+concatenateAlong [nd] _ = Just nd
+concatenateAlong ((NdArray s v):nds) axis =
+  let 
+    maybeVs = extractVectors ((NdArray s v):nds) (vecType v)
+  in 
+    case maybeVs of 
+      Nothing -> Nothing 
+      Just vs ->
+        case concatAlongVec vs (map shape ((NdArray s v):nds)) axis of 
+          Just (ns, c) -> Just $ NdArray ns c
+          Nothing -> Nothing
+
+extractVectors :: forall a . DType a => [NdArray] -> TypeRep a -> Maybe [Vector a]
+extractVectors [] _ = Just []
+extractVectors ((NdArray s v) : nds) t = 
+  case v =@= (undefined :: Vector a) of
+    Just HRefl -> 
+      case extractVectors nds t of 
+        Just vs -> Just (v:vs)
+        _ -> Nothing
+    Nothing -> Nothing 
+
+--concatenateAlong nds axis = case identifyCommon shapes of 
+concatAlongVec :: forall a . DType a => [Vector a] -> [[Integer]] -> Int -> Maybe ([Integer], Vector a)
+concatAlongVec vs shs axis = case identifyCommon shs of 
+  Nothing -> Nothing
+  Just c ->
+      if 0 <= axis && axis < n
+      then if (length c == n) || (length c == n-1 && not (elem axis (map fst c))) 
+        then 
+          let
+            concatIndicies = map (!! axis) shs -- axis can actually be concatenated along
+            concatSize = sum concatIndicies 
+            steps = [0] ++ scanl1 (+) concatIndicies
+            ranges = zip steps (drop 1 steps)
+            fullranges = map (\(x,y) -> [x..y-1]) ranges
+            numbered = M.fromList $ concat $ zipWith (\x y -> map (\z-> (z, y)) x) fullranges [0..]
+            newshape = replaceNth axis concatSize base 
+            (oneDmap,_) = mapIndicies newshape
+            multiMaps = map (\x -> snd $ mapIndicies x) shs
+          in 
+          --in Just newshape
+  
+            Just (newshape, V.generate (fromIntegral $ product newshape) (\i -> 
+              let 
+                multiI = oneDmap M.! i
+                array = numbered M.! (multiI !! axis)
+                arraySize = concatIndicies !! array
+                arrayMultiI = replaceNth axis (multiI !! axis - (steps !! array)) multiI
+                arrayFlatI = (multiMaps !! array) M.! arrayMultiI
+              in
+                --arrayFlatI
+                (vs !! array) V.! arrayFlatI <-@ typeRep @(a)
+              ) )
+
+        else Nothing
+      else Nothing
+  where
+    base = head shs
+    n = length $ base
+
+replaceNth n x l = take n l ++ [x] ++ drop (n+1) l
+
+ctest = concatAlongVec [V.fromList [1..6::Int], V.fromList [11..16::Int], V.fromList [101..108::Int]] [[2,3], [2,3], [2,4]] 1
+dtest = concatenateAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
+
+gather :: NdArray -> [Integer] -> Integer -> NdArray
+gather nd is axis = fromJust $ concatenateAlong (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) ax
+  where
+    ax = fromIntegral axis
+    sliceLead = replicate ax (0,-1)
+    --(m,_) = mapIndicies $ shape nd
+
+onnxex = fromMatrix $ A [
+    A [B (1.0::Float), B 1.2, B 1.9],
+    A [B 2.3, B 3.4, B 3.9],
+    A [B 4.5, B 5.7, B 5.9]]
+
+etest = gather onnxex [0,2] 1
 
 -- * Matrix Operations
 
