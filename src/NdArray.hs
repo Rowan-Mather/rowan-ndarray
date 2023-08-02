@@ -14,4 +14,4 @@ data NdArray where
 
 -- Todo: show in a nicer shapely form :)
 instance Show NdArray where
-  show (NdArray s v) = show s <> " " <> show v
+  show (NdArray s v) = "{elements: " <> show v <> ", shape: " <> show s <> "}"
