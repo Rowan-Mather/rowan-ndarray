@@ -118,6 +118,7 @@ forceRange :: IndexRange -> (Integer, Integer)
 forceRange (I i) = (i,i)
 forceRange (R s t) = (s,t)
 
+positiveInd :: (Ord a, Num a) => a -> a -> a
 positiveInd s i = if i < 0 then s+i else i
 
 --(!?+) :: NdArray -> [IndexRange] -> Maybe NdArray
