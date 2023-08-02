@@ -9,7 +9,7 @@ module Serialisation where
 import DType
 import NdArray
 
-import Data.Int
+import Data.Int()
 import System.IO
 import Data.List as List
 import Data.List.Split
@@ -122,7 +122,7 @@ buffArray t h i = do
     _ -> error "Given TypeRep does not match data type."
 
 loadPayload :: forall a . DType a => Handle -> [Integer] -> TypeRep a -> IO NdArray
-loadPayload h sh t = do
+loadPayload h sh _ = do
   l <- traverse id $ buffArray (typeRep @a) h (product sh)
   pure $ NdArray sh (V.fromList l)
 

@@ -94,9 +94,9 @@ instance DType Int32 where
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ fromIntegral x) :: Int32
-  cos x = (round $ P.sin $ fromIntegral x) :: Int32
-  tan x = (round $ P.sin $ fromIntegral x) :: Int32
+  sin x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
+  cos x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
+  tan x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
@@ -125,9 +125,9 @@ instance DType Int64 where
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ fromIntegral x) :: Int64
-  cos x = (round $ P.sin $ fromIntegral x) :: Int64
-  tan x = (round $ P.sin $ fromIntegral x) :: Int64
+  sin x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
+  cos x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
+  tan x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
@@ -148,7 +148,7 @@ instance DType Float where
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = fromIntegral (xi `P.mod` yi):: Integer
+  mod x y = fromIntegral @Int @Integer (xi `P.mod` yi)
     where xi = P.floor x; yi = P.floor y
   abs = P.abs
   signum = P.signum
@@ -178,7 +178,7 @@ instance DType Double where
   power x d = x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = fromIntegral (xi `P.mod` yi):: Integer
+  mod x y = fromIntegral @Int @Integer (xi `P.mod` yi) :: Integer
     where xi = P.floor x; yi = P.floor y
   abs = P.abs
   signum = P.signum
@@ -204,7 +204,7 @@ instance DType Bool where
   subtract x y = (x || y) && not (x && y)
   multiply x y = x && y
   divide x y = not (x && y)
-  div x y = 0
+  div _ _ = 0
   power _x _d = undefined
   pow x y = toEnum (fromEnum x ^ fromEnum y)
   log _x _y = undefined
@@ -236,13 +236,13 @@ instance DType Char where
   -- Numeric
   add x y = chr $ ord x + ord y
   subtract x y = chr $ min 0 $ ord x + ord y
-  multiply x y = undefined
-  divide x y = undefined
-  div x y = undefined
-  power x d = undefined
-  pow x y = undefined
-  log x y = undefined
-  mod x y = undefined
+  multiply _ _ = undefined
+  divide _ _ = undefined
+  div _ _ = undefined
+  power _ _ = undefined
+  pow _ _ = undefined
+  log _ _ = undefined
+  mod _ _ = undefined
   abs = undefined
   signum c = if isAlpha c then if isUpper c then 'A' else 'a'
              else if isDigit c then '0' else c
