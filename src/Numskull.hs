@@ -5,13 +5,86 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Numskull where
+module Numskull (
+  -- Metadata
+    size
+  , shape
+  , ndType
+
+  -- Creation
+  , fromList
+  , fromListFlat
+  , fromMatrix
+  , singleton
+  , arange
+  , zeros
+
+  -- General mapping, folding & zipping
+  , foldrA 
+  , mapA 
+  , mapTransform 
+  , pointwiseZip 
+
+  -- Summaries
+  , origin
+  , maxElem 
+  , minElem 
+
+  -- Mathematical constant
+  , scale
+  , absA
+  , signumA
+  , ceilA 
+  , floorA 
+  , sinA 
+  , cosA 
+  , tanA
+  , invertA
+  , shiftleftA
+  , shiftrightA
+
+  -- Mathematical pointwise
+  , elemDivide 
+  , elemPow 
+
+  -- Bounds
+  , clip
+
+  -- Type Conversions
+  , convertDTypeTo
+  , matchDType 
+
+  -- Size conversions
+  , constrainSize 
+  , padSize 
+  , setSize 
+  , resize
+
+  -- Shape conversions/manipulations
+  , padShape 
+  , broadcast
+  , concatAlong
+  , gather
+
+  -- Matrix manipulation
+  , swapRows 
+  , diagonal
+  , transpose
+  , transposePerm
+  
+  --Matrix multiplication
+  , dot
+  , matMul
+  , upperTriangle
+  , determinant
+  , determinant2D
+  , swapRowsWith0Pivot
+) where
 
 import NdArray
 import qualified DType
 import DType (DType)
 import MatrixForm
-import Serialisation
 import Indexing
 import Typing
 
@@ -95,7 +168,7 @@ vecType _ = typeRep @a
 -- | Convert a list of arrays to a list of vectors, provided they are all of the specified type.
 extractVectors :: forall a . DType a => [NdArray] -> TypeRep a -> Maybe [Vector a]
 extractVectors [] _ = Just []
-extractVectors ((NdArray s v) : nds) t = 
+extractVectors ((NdArray _ v) : nds) t = 
   case v =@= (undefined :: Vector a) of
     Just HRefl -> 
       case extractVectors nds t of 
@@ -104,7 +177,8 @@ extractVectors ((NdArray s v) : nds) t =
     Nothing -> Nothing
 
 -- Todo: get the ident of the dtype from an nd array
-indentityElem = undefined
+identityElem :: forall a . DType a => NdArray -> a
+identityElem (NdArray s v) = indentityElem' v <-@ typeRep @a
 
 -- Helper for the vectors in identityElem
 indentityElem' :: forall a . DType a => Vector a -> a
@@ -144,7 +218,10 @@ fromMatrix m = NdArray (matrixShape m) (V.fromList l)
 singleton :: DType a => a -> NdArray
 singleton x = NdArray [1] (V.fromList [x])
 
-arange = undefined
+-- | Creates a flat array over the specified range.
+arange :: (Enum a, DType a) => a -> a -> NdArray
+arange mini maxi = if mini <= maxi then NdArray [fromIntegral $ fromEnum maxi - fromEnum mini] $ V.fromList [mini..maxi]
+  else error "Minimum of range is higher than maximum."
 
 {- | Creates the smallest possible square matrix from the given list, 
 padding out any required space with the identity element for the DType -}
@@ -184,35 +261,35 @@ mapTransform f (NdArray s v) = NdArray s (V.map f v)
 scale :: forall a . DType a => a -> NdArray -> NdArray
 scale x = mapA (DType.multiply x)
 
-abs :: NdArray -> NdArray
-abs = mapTransform (DType.abs)
+absA :: NdArray -> NdArray
+absA = mapTransform (DType.abs)
 
-signum :: NdArray -> NdArray
-signum = mapTransform (DType.signum)
+signumA :: NdArray -> NdArray
+signumA = mapTransform (DType.signum)
 
-ceil :: NdArray -> NdArray
-ceil = mapTransform (DType.ceil)
+ceilA :: NdArray -> NdArray
+ceilA = mapTransform (DType.ceil)
 
-floor :: NdArray -> NdArray
-floor = mapTransform (DType.floor)
+floorA :: NdArray -> NdArray
+floorA = mapTransform (DType.floor)
 
-sin :: NdArray -> NdArray
-sin = mapTransform (DType.sin)
+sinA :: NdArray -> NdArray
+sinA = mapTransform (DType.sin)
 
-cos :: NdArray -> NdArray
-cos = mapTransform (DType.cos)
+cosA :: NdArray -> NdArray
+cosA = mapTransform (DType.cos)
 
-tan :: NdArray -> NdArray
-tan = mapTransform (DType.tan)
+tanA :: NdArray -> NdArray
+tanA = mapTransform (DType.tan)
 
-invert :: NdArray -> NdArray
-invert = mapTransform (DType.invert)
+invertA :: NdArray -> NdArray
+invertA = mapTransform (DType.invert)
 
-shiftleft :: NdArray -> NdArray
-shiftleft = mapTransform (DType.shiftleft)
+shiftleftA :: NdArray -> NdArray
+shiftleftA = mapTransform (DType.shiftleft)
 
-shiftright :: NdArray -> NdArray
-shiftright = mapTransform (DType.shiftright)
+shiftrightA :: NdArray -> NdArray
+shiftrightA = mapTransform (DType.shiftright)
 
 origin :: forall a . DType a => NdArray -> a
 origin (NdArray s v) = (v V.! 0) <-@ typeRep @a
@@ -224,8 +301,8 @@ minElem :: forall a . DType a => NdArray -> a
 minElem nd = foldrA min (origin nd) nd
 
 clip :: forall a . DType a => a -> a -> NdArray -> NdArray
-clip min max (NdArray s v) = case v =@= (undefined :: Vector a) of
-  Just HRefl -> mapA (\x -> if x > max then max else if x < min then min else x) (NdArray s v)
+clip mini maxi (NdArray s v) = case v =@= (undefined :: Vector a) of
+  Just HRefl -> mapA (\x -> if x > maxi then maxi else if x < mini then mini else x) (NdArray s v)
   _ -> error "Min and max types do not match array type."
 
 ----- Two Arguments
@@ -273,7 +350,7 @@ convertDTypeTo t (NdArray s v) = convertDTFromTo (vecType v) t (NdArray s v)
 -- Helper with additional typing information
 convertDTFromTo :: forall a b . (DType a, DType b) =>
   TypeRep a -> TypeRep b -> NdArray -> NdArray
-convertDTFromTo t1 t2 (NdArray s v) = case v =@= (undefined :: Vector a) of
+convertDTFromTo _ _ (NdArray s v) = case v =@= (undefined :: Vector a) of
   Just HRefl -> NdArray s (V.map convert v)
   _ -> error "Impossible type mismatch."
   where
@@ -414,6 +491,7 @@ identifyCommon (x : xs) =
 
 -- Concatenate a list of tensors into a single tensor. All input tensors must have the#
 -- same shape, except for the dimension size of the axis to concatenate on.
+concatAlong :: [NdArray] -> Int -> Maybe NdArray
 concatAlong [] _ = Nothing
 concatAlong [nd] _ = Just nd
 concatAlong ((NdArray s v):nds) axis =
@@ -496,6 +574,7 @@ concatAlongVec vs shs axis =
         ) 
       )
 
+replaceNth :: Int -> a -> [a] -> [a]
 replaceNth n x l = take n l ++ [x] ++ drop (n+1) l
 
 -- same number of dimensions
@@ -517,8 +596,8 @@ checkAxis axis shapes =
 axisDimensions :: Int -> [[Integer]] -> [Integer]
 axisDimensions axis shapes = map (!! axis) shapes
 
-ctest = concatAlongVec [V.fromList [1..6::Int], V.fromList [11..16::Int], V.fromList [101..108::Int]] [[2,3], [2,3], [2,4]] 1
-dtest = concatAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
+--ctest = concatAlongVec [V.fromList [1..6::Int], V.fromList [11..16::Int], V.fromList [101..108::Int]] [[2,3], [2,3], [2,4]] 1
+--dtest = concatAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
 
 gather :: NdArray -> [Integer] -> Integer -> NdArray
 gather nd is axis = fromJust $ concatAlong (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) ax
@@ -527,12 +606,14 @@ gather nd is axis = fromJust $ concatAlong (map (\i -> slice (sliceLead ++ [(i,i
     sliceLead = replicate ax (0,-1)
     --(m,_) = mapIndicies $ shape nd
 
+{-
 onnxex = fromMatrix $ A [
     A [B (1.0::Float), B 1.2, B 1.9],
     A [B 2.3, B 3.4, B 3.9],
     A [B 4.5, B 5.7, B 5.9]]
 
 etest = gather onnxex [0,2] 1
+-}
 
 -- * Matrix Operations
 
@@ -638,16 +719,17 @@ matMulVec s v r u =
 -- element at position [i,j] in the resultant nxp matrix (from matMultiplying a prev: mxn and pxm = pxn) 
 --matMulElem :: DType a => 
 --  NdArray -> M.Map [Integer] Int -> NdArray -> M.Map [Integer] Int -> [Integer] -> a
-matMulElem :: DType a =>
+matMulElem :: forall a . DType a =>
   ([Integer] -> a) -> ([Integer] -> a) -> [Integer] -> [Integer] -> a
 matMulElem map1 map2 ks (i:j:_) =
   foldr (\k acc -> DType.add acc $ DType.multiply (map1 [i,k]) (map2 [k,j])) DType.addId ks
-    --sum [DType.multiply (nd1>![i,k]) (nd2>![k,j]) | [k <- 1..m]]
+matMulElem _ _ _ _ = DType.multId :: a
 
 -- DETERMINANTS & INVERSES
 
 -- | Converts a nxn matrix to upper triangle form. O(n^3).
 upperTriangle :: NdArray -> NdArray
+upperTriangle (NdArray [] v) = (NdArray [] v)
 upperTriangle (NdArray (c:rs) v) = 
   let
     (_, fromMulti) = mapIndicies (c:rs)
