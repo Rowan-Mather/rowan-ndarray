@@ -7,14 +7,18 @@
 
 module Numskull (
   -- Metadata
-    size
+  DType
+  , size
   , shape
   , ndType
 
   -- Creation
+  , NdArray
   , fromList
   , fromListFlat
+  , TreeMatrix
   , fromMatrix
+  , fromVector
   , singleton
   , arange
   , zeros
@@ -80,6 +84,21 @@ module Numskull (
   , determinant
   , determinant2D
   , swapRowsWith0Pivot
+
+  -- Indexing
+  , collapseInd
+  , expandInd
+  , map1DIndex
+  , validIndex
+  , (#!)
+  , (!?)
+  , (#!+)
+  , slice
+  , (!/)
+
+  -- Pretty printing
+  , printArray
+
 ) where
 
 import NdArray
