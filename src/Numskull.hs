@@ -22,8 +22,9 @@ module Numskull (
   -- General mapping, folding & zipping
   , foldrA 
   , mapA 
-  , mapTransform 
-  , pointwiseZip 
+  , mapTransform
+  , pointwiseZip
+  , pointwiseBool
 
   -- Summaries
   , origin
@@ -92,7 +93,7 @@ import qualified Data.Vector.Storable as V
 import Data.Vector.Storable (Vector)
 import Type.Reflection
 import qualified Data.Map as M
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust)
 import Data.List (sort, elemIndex, intersect)
 
 -- $setup
@@ -212,6 +213,13 @@ fromMatrix :: DType a => TreeMatrix a -> NdArray
 fromMatrix m = NdArray (matrixShape m) (V.fromList l)
   where l = flattenToList $ matrixToTree m
 
+-- | The safe standard constructor. Returns Nothing if the 
+-- shape does not match the given vector length. 
+fromVector :: DType a => [Integer] -> Vector a -> Maybe NdArray
+fromVector sh v = if V.length v == fromIntegral (product sh) 
+  then Just $ NdArray sh v
+  else Nothing
+
 -- | Creates a 1x1 matrix
 -- >>> printArray $ singleton (3::Int)
 -- 3
@@ -300,9 +308,21 @@ maxElem nd = foldrA max (origin nd) nd
 minElem :: forall a . DType a => NdArray -> a
 minElem nd = foldrA min (origin nd) nd
 
-clip :: forall a . DType a => a -> a -> NdArray -> NdArray
+bound :: Ord a => a -> a -> a -> a
+bound mini maxi x 
+  | x <= mini = mini
+  | x >= maxi = maxi
+  | otherwise = x
+
+-- NB must still specify type for Nothing i.e. clip (Nothing :: Maybe Int) Nothing myNd
+clip :: forall a . DType a => Maybe a -> Maybe a -> NdArray -> NdArray
 clip mini maxi (NdArray s v) = case v =@= (undefined :: Vector a) of
-  Just HRefl -> mapA (\x -> if x > maxi then maxi else if x < mini then mini else x) (NdArray s v)
+  Just HRefl -> 
+    case (mini, maxi) of
+      (Just mn, Just mx) -> mapA (\x -> bound mn mx x) (NdArray s v)
+      (Just mn, Nothing) -> mapA (\x -> bound mn x x) (NdArray s v)
+      (Nothing, Just mx) -> mapA (\x -> bound x mx x) (NdArray s v)
+      (Nothing, Nothing) -> (NdArray s v)
   _ -> error "Min and max types do not match array type."
 
 ----- Two Arguments
@@ -315,6 +335,13 @@ clip mini maxi (NdArray s v) = case v =@= (undefined :: Vector a) of
 -- 6 8
 pointwiseZip :: (forall t . DType t => t -> t -> t) -> NdArray -> NdArray -> NdArray
 pointwiseZip zipfunc (NdArray s v) (NdArray r u) = if s == r then 
+  case v =@= u of
+    Just HRefl -> NdArray s (V.zipWith zipfunc v u) -- Types match
+    Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
+  else error $ shapeMismatch (show s) (show r)
+
+pointwiseBool :: (forall t . DType t => t -> t -> Bool) -> NdArray -> NdArray -> NdArray
+pointwiseBool zipfunc (NdArray s v) (NdArray r u) = if s == r then 
   case v =@= u of
     Just HRefl -> NdArray s (V.zipWith zipfunc v u) -- Types match
     Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
@@ -696,10 +723,10 @@ dot nd1 nd2 = foldrA (DType.add) (DType.addId) (nd1*nd2)
 matMul :: NdArray -> NdArray -> NdArray
 matMul (NdArray s v) (NdArray r u) =
   if (length s /= 2) || (length r /= 2) || s!!1 /= r!!0 then 
-    error "Invalid matrix dimensions."
+    error "Matricies must be 2D and the number of columns in the first must match the number of rows in the second."
   else case v =@= u of
     Just HRefl -> NdArray sh (matMulVec s v r u)
-    _ -> error "Mismatching types"
+    _ -> error "Cannot multiply matricies of two distinct types."
   where
     sh = [s!!0, r!!1]
 
