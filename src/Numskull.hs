@@ -14,6 +14,7 @@ module Numskull (
 
   -- Creation
   , NdArray
+  , NdArray.NdArray
   , fromList
   , fromListFlat
   , TreeMatrix
@@ -66,6 +67,7 @@ module Numskull (
   , resize
 
   -- Shape conversions/manipulations
+  , reshape
   , padShape 
   , broadcast
   , concatAlong
