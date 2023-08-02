@@ -223,6 +223,11 @@ maxElem nd = foldrA max (origin nd) nd
 minElem :: forall a . DType a => NdArray -> a
 minElem nd = foldrA min (origin nd) nd
 
+clip :: forall a . DType a => a -> a -> NdArray -> NdArray
+clip min max (NdArray s v) = case v =@= (undefined :: Vector a) of
+  Just HRefl -> mapA (\x -> if x > max then max else if x < min then min else x) (NdArray s v)
+  _ -> error "Min and max types do not match array type."
+
 ----- Two Arguments
 
 -- | The generic function for operating on two DType arrays with the same shape in an element-wise/pointwise way.
