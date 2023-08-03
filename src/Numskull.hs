@@ -178,12 +178,14 @@ shape (NdArray s _) = s
 getVector :: forall a . DType a => NdArray -> Vector a
 getVector (NdArray _ v) = v <-@ typeRep @(Vector a)
 
--- | Gets the TypeRep for the NdArray elements
-ndType :: forall a . DType a => NdArray -> TypeRep a
-ndType (NdArray _ v) = case v =@= (undefined :: Vector a) of 
-  Just HRefl -> vecType v :: TypeRep a
+-- | Gets the TypeRep String representation the NdArray elements
+ndType :: NdArray -> String
+ndType (NdArray _ v) = show $ vecType v
+{-
+ndType (NdArray _ v) = case v =@= (undefined :: DType a => Vector a) of 
+  Just HRefl -> show $ vecType v
   _ -> error "Impossible type mismatch."
-
+-}
 -- Helper to get the vector typeRep
 vecType :: forall a . DType a => Vector a -> TypeRep a
 vecType _ = typeRep @a
