@@ -10,6 +10,7 @@ module Numskull (
   DType
   , size
   , shape
+  , getVector
   , ndType
 
   -- Creation
@@ -537,12 +538,12 @@ identifyCommon (x : xs) =
       otherwise -> common
 -}
 
--- Concatenate a list of tensors into a single tensor. All input tensors must have the#
+-- Concatenate a list of tensors into a single tensor. All input tensors must have the
 -- same shape, except for the dimension size of the axis to concatenate on.
-concatAlong :: [NdArray] -> Int -> Maybe NdArray
-concatAlong [] _ = Nothing
-concatAlong [nd] _ = Just nd
-concatAlong ((NdArray s v):nds) axis =
+concatAlong :: Int -> [NdArray] -> Maybe NdArray
+concatAlong _ [] = Nothing
+concatAlong _ [nd] = Just nd
+concatAlong axis ((NdArray s v):nds) =
   case extractVectors ((NdArray s v):nds) (vecType v) of 
     Nothing -> Nothing
     Just vs -> 
@@ -648,7 +649,7 @@ axisDimensions axis shapes = map (!! axis) shapes
 --dtest = concatAlong [fromList [2,3] [1..6::Int], fromList [2,3] [11..16::Int], fromList [2,4] [101..108::Int]] 1
 
 gather :: NdArray -> [Integer] -> Integer -> NdArray
-gather nd is axis = fromJust $ concatAlong (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) ax
+gather nd is axis = fromJust $ concatAlong ax (map (\i -> slice (sliceLead ++ [(i,i)]) nd) is) 
   where
     ax = fromIntegral axis
     sliceLead = replicate ax (0,-1)
