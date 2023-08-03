@@ -714,7 +714,10 @@ diagonalVec s v =
 
 -- | Reverses the order of axes and switches the elements accordingly.
 transpose :: NdArray -> NdArray
-transpose (NdArray sh v) = transposePerm [length sh -1..0] (NdArray sh v)
+transpose (NdArray sh v) = transposePerm dec (NdArray sh v)
+  where 
+    l = length sh 
+    dec = [l-1, l-2 .. 0]
 
 -- | Transposes the axes of an array according to the given permutation (e.g. [2,0,1])
 transposePerm :: [Int] -> NdArray -> NdArray
