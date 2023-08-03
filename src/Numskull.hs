@@ -908,7 +908,7 @@ gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta =
     (sBT, vBT) = applyTransposition (sB, vB) transB
   in
     -- Check all the types match
-    case gemmTyping vAT vBT vC alpha beta of 
+    case gemmTyping vAT vBT vC alpha beta of
       Nothing -> Nothing
       Just (vA', vB', vC', alpha', beta') ->
         -- Check A and B have shapes (M,K) and (K, N) 
@@ -936,15 +936,15 @@ and possibly size c up
 and scale the alphas & betas
 -}
 
-applyTransposition :: DType a => ([Integer], Vector a) -> Bool -> ([Integer], Vector a)
+applyTransposition :: forall a . DType a => ([Integer], Vector a) -> Bool -> ([Integer], Vector a)
 applyTransposition (s, v) b = 
-  if b then
-    let (NdArray sT vT) = transpose (NdArray s v)
-    in case vT =@= v of 
-      Just HRefl -> (sT, vT)
-      _ -> error "Impossible type mismatch"
-  else (s, v)
-
+  let 
+    ndT = Numskull.transpose (NdArray s v)
+    sT = shape ndT
+    vT = (getVector ndT) :: Vector a 
+  in 
+    if b then (sT, vT) else (s, v)
+  
 -- Checking all mats are same type & converting scalars if neccersary
 gemmTyping :: forall a b c d e . (DType a, DType b, DType c, DType d, DType e) =>
   Vector a -> Vector b -> Vector c -> d -> e ->
