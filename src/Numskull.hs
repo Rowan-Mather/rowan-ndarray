@@ -87,6 +87,7 @@ module Numskull (
   , determinant
   , determinant2D
   , swapRowsWith0Pivot
+  , gemm
 
   -- Indexing
   , collapseInd
@@ -101,6 +102,9 @@ module Numskull (
 
   -- Pretty printing
   , printArray
+
+  -- typing
+  , (=@=)
 
 ) where
 
@@ -894,6 +898,82 @@ frontColumn col s v = V.ifilter
   where
     rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
     columns = fromIntegral @Integer @Int $ s!!(length s -2)
+
+-- NB if the matricies are integers the scalars will also become integers so you should convert the matricies first
+gemm :: (DType a, DType b) => NdArray -> NdArray -> NdArray -> Bool -> Bool -> a -> b -> Maybe NdArray
+gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta = 
+  let
+    -- Apply transposition to A and B if specified
+    (sAT, vAT) = applyTransposition (sA, vA) transA
+    (sBT, vBT) = applyTransposition (sB, vB) transB
+  in
+    -- Check all the types match
+    case gemmTyping vAT vBT vC alpha beta of 
+      Nothing -> Nothing
+      Just (vA', vB', vC', alpha', beta') ->
+        -- Check A and B have shapes (M,K) and (K, N) 
+        if (length sAT /= 2) || (length sBT /= 2) || (length sC /= 2) || sAT!!1 /= sBT!!0 then Nothing
+        else 
+          let 
+            alphaAB = scale alpha' (matMul (NdArray sAT vA') (NdArray sBT vB'))
+            sAB = shape alphaAB
+          in
+            -- Check if C dimension matches or is broadcastable
+            if (sC!!0 /= 1 && sC!!0 /= sAB!!0) || (sC!!1 /= 1 && sC!!1 /= sAB!!1) then Nothing
+            else 
+              let betaC = scale beta' $ if (sC!!0 /= sAB!!0) || (sC!!1 /= sAB!!1) 
+                  then snd $ fromJust $ broadcast (alphaAB, NdArray sC vC')
+                  else (NdArray sC vC')
+              in 
+                -- Finally, combine the two
+                Just $ alphaAB + betaC
+
+{-
+Ok so we need to convert the scalars to whatever the matrix types are
+and check matrix types all match
+and check the a and b shapes are good
+and possibly size c up
+and scale the alphas & betas
+-}
+
+applyTransposition :: DType a => ([Integer], Vector a) -> Bool -> ([Integer], Vector a)
+applyTransposition (s, v) b = 
+  if b then
+    let (NdArray sT vT) = transpose (NdArray s v)
+    in case vT =@= v of 
+      Just HRefl -> (sT, vT)
+      _ -> error "Impossible type mismatch"
+  else (s, v)
+
+-- Checking all mats are same type & converting scalars if neccersary
+gemmTyping :: forall a b c d e . (DType a, DType b, DType c, DType d, DType e) =>
+  Vector a -> Vector b -> Vector c -> d -> e ->
+    Maybe (Vector a, Vector a, Vector a, a, a)
+gemmTyping vA vB vC alpha beta =
+  case vA =@= vB of
+    Just HRefl -> 
+      case vA =@= vC of 
+        Just HRefl ->
+          -- All matricies match types
+          let 
+            vA' = vA :: Vector a
+            vB' = vB :: Vector a
+            vC' = vC :: Vector a
+
+            -- Convert scalar types
+            alpha' = 
+              case alpha =@= (undefined :: a) of 
+                Just HRefl -> alpha :: a
+                _ -> DType.rationalToDtype (DType.dtypeToRational alpha) :: a
+            beta' = 
+              case beta =@= (undefined :: a) of 
+                Just HRefl -> beta :: a
+                _ -> DType.rationalToDtype (DType.dtypeToRational beta) :: a
+          in
+            Just (vA', vB', vC', alpha', beta')
+        _ -> Nothing
+    _ -> Nothing 
+
 
 -- * Common Errors 
 shapeMismatch :: String -> String -> String
