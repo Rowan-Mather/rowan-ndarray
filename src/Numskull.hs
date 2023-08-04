@@ -918,7 +918,8 @@ gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta =
         if (length sAT /= 2) || (length sBT /= 2) || (length sC /= 2) || sAT!!1 /= sBT!!0 then Nothing
         else 
           let 
-            alphaAB = scale alpha' (matMul (NdArray sAT vA') (NdArray sBT vB'))
+            --alphaAB = scale alpha' (matMul (NdArray sAT vA') (NdArray sBT vB'))
+            alphaAB = scale alpha' (dot (NdArray sAT vA') (NdArray sBT vB'))
             sAB = shape alphaAB
           in
             -- Check if C dimension matches or is broadcastable
