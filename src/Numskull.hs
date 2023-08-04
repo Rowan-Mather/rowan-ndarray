@@ -906,8 +906,7 @@ frontColumn col s v = V.ifilter
 
 -- NB if the matricies are integers the scalars will also become integers so you should convert the matricies first
 gemm :: (DType a, DType b) => 
-  NdArray -> NdArray -> NdArray -> Bool -> Bool -> a -> b -> 
-    Maybe (NdArray, NdArray, NdArray)
+  NdArray -> NdArray -> NdArray -> Bool -> Bool -> a -> b -> Maybe (NdArray)
 gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta = 
   let
     -- Apply transposition to A and B if specified
@@ -923,7 +922,6 @@ gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta =
         else 
           let 
             alphaAB = scale alpha' (matMul (NdArray sAT vA') (NdArray sBT vB'))
-            --alphaAB = scale alpha' (dot (NdArray sAT vA') (NdArray sBT vB'))
             sAB = shape alphaAB
           in
             -- Check if C dimension matches or is broadcastable
@@ -934,7 +932,7 @@ gemm (NdArray sA vA) (NdArray sB vB) (NdArray sC vC) transA transB alpha beta =
                   else (NdArray sC vC')
               in 
                 -- Finally, combine the two
-                Just $ (alphaAB + betaC, (NdArray sAT vA'), (NdArray sAT vAT))
+                Just $ (alphaAB + betaC)
 
 {-
 Ok so we need to convert the scalars to whatever the matrix types are
