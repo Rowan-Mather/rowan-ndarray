@@ -124,6 +124,8 @@ positiveInd s i = if i < 0 then s+i else i
 --(!?+) :: NdArray -> [IndexRange] -> Maybe NdArray
 --(!?+) = undefined
 
+{- | Takes a series of ranges corresponding to each dimension in the array and returns
+the sub-array. -}
 slice :: [(Integer, Integer)] -> NdArray -> NdArray
 slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
   where (m,_) = mapIndicies sh
@@ -154,7 +156,7 @@ sliceDim (x,y) d m (NdArray sh v) =
     dimSize = sh !! d 
     (x', y') = (positiveInd dimSize x, positiveInd dimSize y)
 
-
+-- Replaces the nth value of an array if the newValue is smaller.
 -- https://stackoverflow.com/questions/5852722/replace-individual-list-elements-in-haskell
 shrinkNth :: Ord a => Int -> a -> [a] -> [a]
 shrinkNth _ _ [] = []
