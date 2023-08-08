@@ -9,7 +9,7 @@ module Serialisation where
 import DType
 import NdArray
 
-import Data.Int()
+import Data.Int
 import System.IO
 import Data.List as List
 import Data.List.Split
@@ -130,12 +130,12 @@ loadPayload h sh _ = do
 reifyDType :: String -> (forall a . DType a => TypeRep a -> r) -> r
 reifyDType dtype cont =
   case dtype of 
-    -- "<i8" -> cont (typeRep @Int64)
-    "<i8" -> cont (typeRep @Int)
-    -- "<i4" -> cont (typeRep @Int32)
+    "<i8" -> cont (typeRep @Int64)
+    --"<i8" -> cont (typeRep @Int)
+    "<i4" -> cont (typeRep @Int32)
     "<f4" -> cont (typeRep @Float)
-    -- "<f8" -> cont (typeRep @Double)
-    -- "<U1" -> cont (typeRep @Char)
+    "<f8" -> cont (typeRep @Double)
+    "<U1" -> cont (typeRep @Char)
     "<?"  -> cont (typeRep @Bool)
     _     -> error "Unsupported dtype."
 
