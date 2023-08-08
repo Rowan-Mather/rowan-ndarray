@@ -102,6 +102,7 @@ module Numskull (
 
   -- Pretty printing
   , printArray
+  , prettyShowArray
 
   -- typing
   , (=@=)
@@ -120,7 +121,7 @@ import Data.Vector.Storable (Vector)
 import Type.Reflection
 import qualified Data.Map as M
 import Data.Maybe (fromJust, isJust)
-import Data.List (sort, elemIndex, intersect)
+import Data.List (sort, elemIndex, intersect, zipWith4)
 
 import Debug.Trace
 
@@ -187,6 +188,14 @@ getVector (NdArray _ v) = v <-@ typeRep @(Vector a)
 -- | Gets the TypeRep String representation the NdArray elements
 ndType :: NdArray -> String
 ndType (NdArray _ v) = show $ vecType v
+
+checkNdType :: forall a b . (DType a, DType b) => NdArray -> TypeRep a -> Maybe (a :~~: b)
+checkNdType (NdArray _ v) t = 
+  let tv = vecType v 
+  in case (eqTypeRep tv (typeRep @b)) of 
+    Just HRefl -> eqTypeRep (typeRep @a) (tv :: TypeRep b)
+    _ -> error "Impossibly mismatching types."
+
 {-
 ndType (NdArray _ v) = case v =@= (undefined :: DType a => Vector a) of 
   Just HRefl -> show $ vecType v
@@ -201,7 +210,7 @@ extractVectors :: forall a . DType a => [NdArray] -> TypeRep a -> Maybe [Vector 
 extractVectors [] _ = Just []
 extractVectors ((NdArray _ v) : nds) t = 
   case v =@= (undefined :: Vector a) of
-    Just HRefl -> 
+    Just HRefl ->
       case extractVectors nds t of 
         Just vs -> Just (v:vs)
         _ -> Nothing
@@ -377,9 +386,30 @@ pointwiseBool zipfunc (NdArray s v) (NdArray r u) = if s == r then
     Nothing    -> error $ typeMismatch (show$ty v) (show$ty u)
   else error $ shapeMismatch (show s) (show r)
 
+zipArrayWith :: forall a b c . (DType a, DType b, DType c) => (a -> b -> c) -> NdArray -> NdArray -> NdArray
+zipArrayWith zipfunc (NdArray s v) (NdArray r u) = 
+  let 
+    -- Truncate the shapes to match each other
+    ndC1 = constrainShape r (NdArray s v)
+    ndC2 = constrainShape s (NdArray r u)
+    s' = shape ndC1
+  in
+    -- Type check the function
+    case (v =@ typeRep @(Vector a), u =@ typeRep @(Vector b)) of
+      (Just HRefl, Just HRefl) ->
+        let 
+          v' = getVector ndC1 :: Vector a
+          u' = getVector ndC2 :: Vector b
+        in NdArray s' (V.zipWith zipfunc v' u' :: Vector c)
+      _    -> error "Type mismatch"
+
 -- Todo: Needs to operate on doubles
 --elemDivide :: NdArray -> NdArray -> NdArray
 --elemDivide = pointwiseZip divide
+
+-- | Pointwise integer division
+--elemDiv :: NdArray -> NdArray -> NdArray
+--elemDiv = pointwiseZip DType.div
 
 -- | Pointwise division
 elemDivide :: NdArray -> NdArray -> NdArray
@@ -486,10 +516,18 @@ padShape r (NdArray s v) =
     then NdArray r (V.unsafeUpdate_ nullVec newIndices v)
     else error "Cannot map to a smaller shape."
 
+constrainShape :: [Integer] -> NdArray -> NdArray
+constrainShape r (NdArray s v) =
+  let 
+    s' = zipWith min r s
+    sPad = s' ++ replicate (length s - length r) 1
+  in NdArray s' $ 
+    V.ifilter (\i _ -> and $ zipWith (<) (expandInd s (toInteger i)) sPad) v
+
 --broadcast :: forall a . DType a => (NdArray, NdArray) -> Maybe (Vector a, Vector a)
 broadcast :: (NdArray, NdArray) -> Maybe (NdArray, NdArray)
-broadcast ((NdArray s v), (NdArray r u)) = 
-  let 
+broadcast ((NdArray s v), (NdArray r u)) =
+  let
     (s',v',r',u') = broadcastDimensions s v r u
     newshape = sequenceA $ zipWith (\x y -> if x == y || x == 1 || y == 1 
       then Just (max x y) else Nothing) s' r'
@@ -505,7 +543,7 @@ broadcast ((NdArray s v), (NdArray r u)) =
 broadcastDimensions :: (DType a, DType b) => 
   [Integer] -> Vector a -> [Integer] -> Vector b -> 
     ([Integer], Vector a, [Integer], Vector b)
-broadcastDimensions s v r u 
+broadcastDimensions s v r u
   | sl == rl = (s,v,
                 r,u)
   |  sl > rl = (s,v,
@@ -752,16 +790,34 @@ invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm
 dot :: DType a => NdArray -> NdArray -> a
 dot nd1 nd2 = foldrA (DType.add) (DType.addId) (nd1*nd2)
 
--- For now, just nxm and mxp = nxp
+-- 
 matMul :: NdArray -> NdArray -> NdArray
 matMul (NdArray s v) (NdArray r u) =
-  if (length s /= 2) || (length r /= 2) || s!!1 /= r!!0 then 
-    error "Matricies must be 2D and the number of columns in the first must match the number of rows in the second."
-  else case v =@= u of
-    Just HRefl -> NdArray sh (matMulVec s v r u)
+  case v =@= u of
+    Just HRefl -> 
+      case (reverse s, reverse r) of 
+        -- Standard matrix multiplication
+        ([m, n], [q, p]) | m == p -> NdArray [n,q] (matMulVec s v r u)
+        -- 1D arrays have the extra dimension pre/appended then result collapses back to 1D
+        ([m], [q, p])   | m == p -> NdArray [q] (matMulVec [1,m] v r u)
+        ([m, n], [p])   | m == p -> NdArray [n] (matMulVec s v [p,1] u)
+        -- ND-arrays are broadcast to match each other where possible and treated as 
+        -- stacks of nxm/pxq arrays.
+        ((m : n : ss), (q : p : rs)) | m == p ->
+          let
+            (s', v', r', u') = broadcastDimensions s v r u
+            stackA = vectorChunksOf (fromIntegral @Integer @Int $ m * n) v'
+            stackB = vectorChunksOf (fromIntegral @Integer @Int $ q * p) u'
+            stackAB = zipWith4 matMulVec (repeat [n,m]) stackA (repeat [p,q]) stackB        
+          in
+            NdArray (take (length s' -2) s' ++ [n,q]) $ V.concat stackAB
+        _ -> error "Invalid matrix dimensions for multiplication"    
     _ -> error "Cannot multiply matricies of two distinct types."
-  where
-    sh = [s!!0, r!!1]
+
+vectorChunksOf :: V.Storable a => Int -> Vector a -> [Vector a]
+vectorChunksOf _ v | V.null v = []
+vectorChunksOf n v = first : (vectorChunksOf n rest)
+  where (first, rest) = V.splitAt n v
 
 -- returning the vector result of the matMul
 matMulVec :: forall a . DType a => 
