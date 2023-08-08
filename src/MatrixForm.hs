@@ -40,8 +40,8 @@ matrixShape :: TreeMatrix a -> [Integer]
 matrixShape = treeShape . matrixToTree
 
 -- WRITING MATRICIES
-printArray :: NdArray -> IO ()
-printArray (NdArray s v) = putStr $ conc <> "\n"
+prettyShowArray :: NdArray -> String
+prettyShowArray (NdArray s v) = conc <> "\n"
   where
     vl = map show (V.toList v)
     largest = maximum $ map length vl
@@ -49,6 +49,9 @@ printArray (NdArray s v) = putStr $ conc <> "\n"
     spaced = zipWith (\i x -> (i, padStringTo largest x)) [0..] vl
     lined = addNewlines newlines spaced
     conc = concatMap snd lined
+
+printArray :: NdArray -> IO ()
+printArray nd = putStr $ prettyShowArray nd
 
 padStringTo :: Int -> String -> String
 padStringTo i s = replicate (i - length s) ' ' ++ s ++ " "
