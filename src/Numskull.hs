@@ -423,6 +423,32 @@ elemDivide = pointwiseZip DType.divide
 elemPow :: NdArray -> NdArray -> NdArray
 elemPow = pointwiseZip DType.pow
 
+----- Many Arguments
+
+-- unsafe over different types
+sum :: [NdArray] -> NdArray
+sum ((NdArray s v) : nds) = foldr (\x acc -> (padShape sh x) + acc) (zeros (vecType v) sh) ((NdArray s v) : nds) 
+  where sh = maximiseShape (map shape nds)
+
+maximiseShape :: [[Integer]] -> [Integer]
+maximiseShape [] = []
+maximiseShape [sh] = sh
+maximiseShape (sh : shs) = 
+  let 
+    m = maximiseShape shs
+    diff = length sh - length m
+  in 
+    if diff > 0 
+      then zipWith max sh ((take diff sh) ++ m) 
+      else zipWith max (take (-diff) m ++ sh) m
+
+
+--mean :: [NdArray] -> NdArray-
+--mean [] = NdArray [] $ V.fromList []
+--mean [nd] = nd
+
+
+
 -- * Type & Shape Conversion
 {- | Converting between the standard dtypes and changing the shapes of arrays.
 NB the difference between 'size' and 'shape'. The shape is an Integer list 
@@ -649,7 +675,7 @@ concatAlongVec vs shs axis =
   else 
     let 
       axDim = axisDimensions axis shs
-      newshape = replaceNth axis (sum axDim) (head shs)
+      newshape = replaceNth axis (Prelude.sum axDim) (head shs)
       -- first is sub-array number, second is sub-array index
       arrayPlot = concat $ zipWith (\arr dim -> [(arr, x) | x <- [0..dim-1]]) [0..] axDim 
       (newMultiInds, _) = mapIndicies newshape
