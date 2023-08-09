@@ -1,0 +1,30 @@
+#####################################################################
+## HINTS
+
+- functions:
+  - {name: Test.Hspec.focus, within: []} # focus should only be used for debugging
+  - {name: Prelude.undefined, within: []} # Prelude.undefined should only be used temporarily
+  - {name: Clash.XException.undefined, within: []} # Clash undefined should only be used temporarily (use deepErrorX instead)
+
+- error: {lhs: fromString (show x), rhs: Data.String.Extra.show' x}
+- error: {lhs: Data.Text.pack (show x), rhs: Data.String.Extra.show' x}
+- error: {lhs: fromIntegral (Clash.Promoted.Nat.snatToInteger x), rhs: Clash.Promoted.Nat.snatToNum x}
+- error: {lhs: Clash.Sized.Internal.BitVector.split# (ClaSH.Class.BitPack.pack x), rhs: Clash.Prelude.BitIndex.split}
+- error: {lhs: Clash.Signal.mux p (fmap Just x) (pure Nothing), rhs: Clash.Signal.Extra.boolToMaybe p x}
+- error: {lhs: Clash.Signal.mux p (Just <$> x) (pure Nothing), rhs: Clash.Signal.Extra.boolToMaybe p x}
+- error: {lhs: Clash.Prelude.moore x id, rhs: Clash.Prelude.Moore.medvedev x}
+- error: {lhs: Clash.Prelude.medvedev f x (pure ()), rhs: Clash.Source.source' (flip f ()) x}
+
+# We tend to use pure over return
+- error: {lhs: return, rhs: pure}
+- error: {lhs: ceiling (logBase 2 (fromIntegral x)), rhs: Numeric.Natural.Extra.fromNatural (Numeric.Log2.clog2 (fromIntegral x))}
+- error: {lhs: floor (logBase 2 (fromIntegral x)), rhs: Numeric.Natural.Extra.fromNatural (Numeric.Log2.flog2 (fromIntegral x))}
+- error: {lhs: ceiling (logBase 4 (fromIntegral x)), rhs: Numeric.Natural.Extra.fromNatural (Numeric.Log2.clog4 (fromIntegral x))}
+- error: {lhs: floor (logBase 4 (fromIntegral x)), rhs: Numeric.Natural.Extra.fromNatural (Numeric.Log2.flog4 (fromIntegral x))}
+
+# We all know when it's appropriate to use [Char]
+- ignore: {name: Use String}
+- ignore: {name: Use head}
+- ignore: {name: Reduce duplication}
+- ignore: {name: Use tuple-section}
+- ignore: {name: Use <$>}
