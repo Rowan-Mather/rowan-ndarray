@@ -18,11 +18,11 @@ class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
   subtract :: a -> a -> a
   multiply :: a -> a -> a
   divide :: a -> a -> a
-  div :: a -> a -> Integer
+  div :: a -> a -> Int
   power :: a -> Double -> Double
   pow :: a -> a -> a
   log :: a -> a -> a
-  mod :: a -> a -> Integer
+  mod :: a -> a -> Int
   abs :: a -> a
   signum :: a -> a
   ceil :: a -> a
@@ -47,13 +47,13 @@ instance DType Int where
   subtract x y = x - y
   multiply x y = x * y
   divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  div x y = (fromIntegral $ P.div x y) :: Int
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int
     where xd = fromIntegral @Int @Double x
           yd = fromIntegral @Int @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod = P.mod
   abs = P.abs
   signum = P.signum
   ceil x = x
@@ -82,13 +82,13 @@ instance DType Int32 where
   subtract x y = x - y
   multiply x y = x * y
   divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  div x y = fromIntegral @Int32 @Int $ P.div x y
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int32
     where xd = fromIntegral @Int32 @Double x
           yd = fromIntegral @Int32 @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod x y = fromIntegral @Int32 @Int $ P.mod x y
   abs = P.abs
   signum = P.signum
   ceil x = x
@@ -113,13 +113,13 @@ instance DType Int64 where
   subtract x y = x - y
   multiply x y = x * y
   divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  div x y = fromIntegral @Int64 @Int $ P.div x y
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int64
     where xd = fromIntegral @Int64 @Double x
           yd = fromIntegral @Int64 @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod x y = fromIntegral @Int64 @Int $ P.mod x y
   abs = P.abs
   signum = P.signum
   ceil x = x
@@ -148,8 +148,7 @@ instance DType Float where
   power x d = float2Double x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = fromIntegral @Int @Integer (xi `P.mod` yi)
-    where xi = P.floor x; yi = P.floor y
+  mod x y = P.floor x `P.mod` P.floor y
   abs = P.abs
   signum = P.signum
   ceil = fromIntegral @Integer @Float . P.ceiling
@@ -178,8 +177,7 @@ instance DType Double where
   power x d = x ** d
   pow x y = x ** y
   log x y = logBase x y
-  mod x y = fromIntegral @Int @Integer (xi `P.mod` yi) :: Integer
-    where xi = P.floor x; yi = P.floor y
+  mod x y = P.floor x `P.mod` P.floor y
   abs = P.abs
   signum = P.signum
   ceil = fromIntegral @Integer @Double . P.ceiling
@@ -208,7 +206,7 @@ instance DType Bool where
   power _x _d = undefined
   pow x y = toEnum (fromEnum x ^ fromEnum y)
   log _x _y = undefined
-  mod x y = fromIntegral (fromEnum x `P.mod` fromEnum y) :: Integer
+  mod x y = fromEnum x `P.mod` fromEnum y
   abs _ = True
   signum = id
   ceil = id
