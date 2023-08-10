@@ -16,14 +16,15 @@ import NdArray
 data NdArrayException 
     = DTypeMismatch NdArray NdArray String
     | ShapeMismatch NdArray NdArray String
-    | CreationSize Integer [Integer]
+    | CreationSize Int (Vector Int)
     | TypeMismatch String
-    | ExceededShape Integer [Integer]
+    | ExceededShape Int (Vector Int)
+    | NotBroadcastable NdArray NdArray String
 
 instance Exception NdArrayException
 
 instance Show NdArrayException where
-    show (DTypeMismatch (NdArray _ v) (NdArray _ u) extra) = 
+    show (DTypeMismatch (NdArray _ _ v) (NdArray _ _ u) extra) = 
         if extra == "" then 
             "Cannot match NdArrays of type '" <> showType v <> 
                 "' and type '" <> showType u <> "'."
@@ -31,13 +32,14 @@ instance Show NdArrayException where
             "Cannot perform " <> extra <> " on mismatching NdArrays of type '" <> showType v <> 
                 "' and type '" <> showType u <> "'."
     
-    show (ShapeMismatch (NdArray s _) (NdArray r _) extra) =
+    show (ShapeMismatch (NdArray s t _) (NdArray r d _) extra) =
         if extra == "" then 
-            "Cannot match NdArrays of shape " <> show s <> 
-                " and shape " <> show r <> "."
+            "Cannot match NdArrays of shape " <> show s <> " and stride " <> show t <>
+                ", and shape " <> show r <> "and stride " <> show d <> "."
         else 
-            "Cannot perform " <> extra <> " on mismatching NdArrays of shape " <> show s <> 
-                " and shape " <> show r <> "."
+            "Cannot perform " <> extra <> " on mismatching NdArrays of shape " <> 
+                show s <> " and stride " <> show t <>
+                " and shape " <> show r <> "and stride " <> show d <> "."
 
     show (CreationSize sz sh) =
         "Cannot create array of size " <> show sz <> " and shape " <> show sh <> "."
@@ -46,6 +48,9 @@ instance Show NdArrayException where
 
     show (ExceededShape dim sh) = 
         "Cannot index into dimension " <> show dim <> "in NdArray of shape " <> show sh <> "."
+
+    show (NotBroadcastable (NdArray s _ _) (NdArray r _ _) str) = 
+        "Cannot broadcast NdArrays of shape " <> show s <> "and shape" <> show r <> str <> "."
 
 -- Returns the string type of vector elements.
 showType :: forall a . DType a => Vector a -> String
