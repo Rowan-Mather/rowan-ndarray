@@ -4,6 +4,7 @@
 
 module Indexing where
 
+import Control.Exception
 import qualified Data.Vector.Storable as V
 import Data.Vector.Storable (Vector)
 import qualified Data.Map as M
@@ -13,6 +14,7 @@ import NdArray
 import Typing
 import qualified DType
 import DType (DType)
+import NdArrayException
 
 {- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
 we convert between the vector index, i, and multi-dimension index, [x,y,z,...], using the 
@@ -153,7 +155,7 @@ sliceWithMap m d (s : ss) (NdArray sh v) = sliceWithMap m (d+1) ss $
 -- Takes a slice of an NdArray at a particular dimension.
 sliceDim :: (Integer, Integer) -> Int -> M.Map Int [Integer] -> NdArray -> NdArray
 sliceDim (x,y) d m (NdArray sh v) = 
-  if d >= length sh then throw (ExceededShape d sh)
+  if d >= length sh then throw (ExceededShape (fromIntegral d) sh)
   else NdArray
     (if y' < x' then [] else shrinkNth d (y'-x'+1) sh)
     (V.ifilter
