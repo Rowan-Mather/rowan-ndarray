@@ -221,9 +221,9 @@ instance DType Bool where
   -- | Logical reverse implication
   pow x y = not y || x
   -- | Logical implication
-  log _x _y = not x || y
-  -- | Logical XOR
-  mod x y = (x || y) && not (x && y)
+  log x y = not x || y
+  -- | Logical XOR, but Int result
+  mod x y = fromEnum $ (x || y) && not (x && y)
   abs _ = True
   signum = id
   ceil = id

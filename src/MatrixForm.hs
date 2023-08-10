@@ -63,7 +63,7 @@ padStringTo i s = replicate (i - length s) ' ' ++ s ++ " "
 
 -- Separates columns and higher dimensions by newlines.
 addNewlines :: [Integer] -> [(Integer, String)] -> [(Integer, String)]
-addNewlines = foldr (\l -> 
+addNewlines ls xs = foldr (\l -> 
   map (\(i, x) -> if i /= 0 && i `mod` l == 0 
     then (i, "\n" ++ x) 
-    else (i, x)))
+    else (i, x))) xs ls

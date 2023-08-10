@@ -119,23 +119,23 @@ module Numskull (
 
 ) where
 
-import           DType            (DType)
 import qualified DType
+import           DType                (DType)
 import           Indexing
 import           MatrixForm
 import           NdArray
 import           NdArrayException
+import           Serialisation
 import           Typing
 
 import           Control.Exception
+import           Control.Monad        (zipWithM)
 import           Data.List            (elemIndex, intersect, sort, zipWith4)
 import qualified Data.Map             as M
 import           Data.Maybe           (fromJust)
 import           Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import           Type.Reflection
-
-import Debug.Trace
 
 -- $setup
 -- >>> import Numskull as N
@@ -330,7 +330,7 @@ mapTransform f (NdArray s v) = NdArray s (V.map f v)
 
 -- | Multiplies all elements by a scalar.
 scale :: forall a . DType a => a -> NdArray -> NdArray
-scale = mapA DType.multiply
+scale x = mapA (DType.multiply x)
 
 -- | Takes the absolute value of all elements.
 absA :: NdArray -> NdArray
@@ -1067,14 +1067,3 @@ frontColumn col s v = V.ifilter
     rowLen = fromIntegral @Integer @Int $ s!!(length s -1)
     columns = fromIntegral @Integer @Int $ s!!(length s -2)
 
-
-
-
-ndt1 :: NdArray
-ndt1 = fromList [3,2] [1,2,3,4,5,6::Int]
-ndt2 :: NdArray
-ndt2 = fromList [2,3] [0,2,4,6,8,10::Int]
-
-nd3 = fromList [2,2] [1,2,3,4 :: Int]
-
-nd4 = fromList [3,3] [2,5,1, 9,2,7, 4,16,3 ::Float]
