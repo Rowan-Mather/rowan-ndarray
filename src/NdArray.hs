@@ -6,12 +6,12 @@ import DType
 import Data.Vector.Storable
 
 -- * NdArray
--- Todo: Should shapes be [Integer] or [Int] or maybe even another vector?
--- | The core of this module. NdArrays can be of any type (a) and size/shape (list of dimensions) but these are
--- hidden by the type. Both attributes can be inferred using the library constructors (TODO!).
+-- | The core of this module. NdArrays can be of any DType a and size/shape (list of dimensions)
+-- These are hidden by the type. 
 data NdArray where
   NdArray :: DType a => [Integer] -> Vector a -> NdArray
 
--- Todo: show in a nicer shapely form :)
+-- | By default arrays are printed flat with the shape as metadata. 
+-- For a tidier representation, use printArray.
 instance Show NdArray where
   show (NdArray s v) = "{elements: " <> show v <> ", shape: " <> show s <> "}"
