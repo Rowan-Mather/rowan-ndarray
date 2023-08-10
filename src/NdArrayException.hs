@@ -11,11 +11,14 @@ import Data.Vector.Storable (Vector)
 import DType
 import NdArray
 
+-- | The main type of exception thrown from Numskull functions when the user
+-- tries to perform illegal operations given the size and shape of the array. 
 data NdArrayException 
     = DTypeMismatch NdArray NdArray String
     | ShapeMismatch NdArray NdArray String
     | CreationSize Integer [Integer]
     | TypeMismatch String
+    | ExceededShape Integer [Integer]
 
 instance Exception NdArrayException
 
@@ -41,5 +44,9 @@ instance Show NdArrayException where
 
     show (TypeMismatch str) = str 
 
+    show (ExceededShape dim sh) = 
+        "Cannot index into dimension " <> show dim <> "in NdArray of shape " <> show sh <> "."
+
+-- Returns the string type of vector elements.
 showType :: forall a . DType a => Vector a -> String
 showType _ = show (typeRep @a)
