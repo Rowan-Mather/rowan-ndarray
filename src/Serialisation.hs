@@ -1,42 +1,42 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RankNTypes #-}
-
 
 module Serialisation where
 
 import DType
 import NdArray
 
-import Data.Int
-import System.IO
-import Data.List as List
-import Data.List.Split
+import           Data.Int
+import           Data.List            as List
+import           Data.List.Split
+import qualified Data.Map             as M
 import qualified Data.Vector.Storable as V
-import qualified Data.Map as M
-import Type.Reflection
-import Foreign (Ptr, alloca, mallocBytes)
-import Foreign.Storable (poke, peek, sizeOf)
-import Data.Word (Word16)
+import           Data.Word            (Word16)
+import           Foreign              (Ptr, alloca, mallocBytes)
+import           Foreign.Storable     (peek, poke, sizeOf)
+import           System.IO
+import           Type.Reflection
 
--- | HASKELL TO PYTHON | -- 
+-- * HASKELL TO PYTHON
 
 -- | Built in numpy serialisation descriptions
 getNumpyDType :: NdArray -> String
 getNumpyDType (NdArray _ v) = case show $ typeOf v of
   "Vector Int"      -> "<i8"
+  "Vector Int64"    -> "<i8"
   "Vector Int32"    -> "<i4"
   "Vector Integer"  -> "<i8"
   "Vector Float"    -> "<f4"
   "Vector Double"   -> "<f8"
   "Vector Bool"     -> "<?"
   "Vector Char"     -> "<U1"
-  _                 -> error "Non-standard types cannot be serialised. Yet."
-  
--- | Converts shape list to a string of the Numpy tuple form e.g. (3,2,)  
+  _                 -> error "Non-standard types cannot be serialised."
+
+-- | Converts shape list to a string of the Numpy tuple form e.g. (3,2,)
 getNumpyShape :: NdArray -> String
-getNumpyShape (NdArray s _) = "(" <> (drop 1 $ take (length lshape -1) $ lshape) <> ",)"
+getNumpyShape (NdArray s _) = "(" <> drop 1 (take (length lshape -1) lshape) <> ",)"
   where lshape = show s
 
 -- | Gets the maximum memory required for any single element in an array
@@ -50,13 +50,13 @@ saveNpy :: FilePath -> NdArray -> IO ()
 saveNpy path (NdArray s v) = withBinaryFile path WriteMode $ \h -> do
   let
     -- Unpacked specs
-    nd = (NdArray s v)
+    nd = NdArray s v
     dtype = getNumpyDType nd
     shape = getNumpyShape nd
     vectorSize = (fromInteger $ product s) :: Int
     elemSize = getElemSize nd
     -- Header string without length
-    header = 
+    header =
       "{'descr': '"<>   dtype   <> "', " <>
       "'fortran_order': False, "<>
       "'shape': "<>     shape   <> " }"
@@ -75,63 +75,48 @@ saveNpy path (NdArray s v) = withBinaryFile path WriteMode $ \h -> do
   V.unsafeWith v (\ptr -> hPutBuf h ptr (vectorSize * elemSize))
 
 
--- | PYTHON TO HASKELL | -- 
+-- * PYTHON TO HASKELL
 
--- METADATA
+-- Splits the metadata into a list of keys and values
 listDict :: String -> [String]
-listDict x = splitOn " " $ (splitOneOf "{}" (filter (/='\'') x)) !! 1
+listDict x = splitOn " " $ splitOneOf "{}" (filter (/='\'') x) !! 1
 
+-- Pairs adjacent keys and values in the metadata
 pairDict :: [String] -> [(String, String)]
 pairDict [] = []
-pairDict (_:[]) = []
+pairDict [_] = []
 pairDict (k:v:ls) = (k, v) : pairDict ls
 
---pyToTypeRep "<i8" = typeRep @Int
---pyToTypeRep "<f4" = typeRep @Float 
---pyToTypeRep :: DType a => String -> TypeRep a
-
-{-
-pyToTypeRep :: forall a . String -> (DType a => TypeRep a)
-pyToTypeRep dtype = case dtype of 
-  "<i4" -> typeRep @Int :: TypeRep a
-  --"<i8" ->
-  "<f4" -> typeRep @Float
-  --"<f8" ->
-  --"<?"  ->
-  --"<U1" -> 
-  _     -> error "Unsupported dtype."
--}
-
--- PAYLOAD
 -- Read in an element from the handle
 buffElement :: forall a . DType a => Handle -> IO a
 buffElement h = do
   let elemSize = sizeOf (undefined :: a)
   ptr <- mallocBytes elemSize
   _ <- hGetBuf h ptr elemSize
-  val <- peek ptr
-  pure val
+  peek ptr
 
 -- Read in the complete array as a list from the handle
 buffArray :: forall a . DType a => TypeRep a -> Handle -> Integer -> [IO a]
 buffArray _ _ 0 = []
 buffArray t h i = do
-  let buffed = (buffElement h) : buffArray t h (i-1)
+  let buffed = buffElement h : buffArray t h (i-1)
   case eqTypeRep (typeOf buffed) (typeRep @[IO a]) of
     Just HRefl -> buffed
     _ -> error "Given TypeRep does not match data type."
 
+-- Reads a buffer into an NdArray given the handle, shape and dtype
 loadPayload :: forall a . DType a => Handle -> [Integer] -> TypeRep a -> IO NdArray
 loadPayload h sh _ = do
-  l <- traverse id $ buffArray (typeRep @a) h (product sh)
+  l <- sequenceA (buffArray (typeRep @a) h (product sh))
   pure $ NdArray sh (V.fromList l)
 
--- todo check unicode UTF
+-- Todo: check unicode UTF
+-- Facilitates conversion from a numpy dtype signature to a typeRep
 reifyDType :: String -> (forall a . DType a => TypeRep a -> r) -> r
 reifyDType dtype cont =
-  case dtype of 
+  case dtype of
     "<i8" -> cont (typeRep @Int64)
-    --"<i8" -> cont (typeRep @Int)
+    "<i8" -> cont (typeRep @Int)
     "<i4" -> cont (typeRep @Int32)
     "<f4" -> cont (typeRep @Float)
     "<f8" -> cont (typeRep @Double)
@@ -139,14 +124,13 @@ reifyDType dtype cont =
     "<?"  -> cont (typeRep @Bool)
     _     -> error "Unsupported dtype."
 
-
 -- | Loads an NdArray from a .npy file
 loadNpy :: FilePath -> IO NdArray
 loadNpy path = withBinaryFile path ReadMode $ \h -> do
   -- Unpacks and parses the header to get the array type and size
   descr <- hGetLine h
   let
-    -- Places the dtype description, fortran order and shape in a map 
+    -- Places the dtype description, fortran order and shape in a map
     metadata = (M.fromList . pairDict . listDict) descr
     -- Extracts the dtype description e.g. <i8
     dtype = filter (/=',') (metadata M.! "descr:")
@@ -154,32 +138,5 @@ loadNpy path = withBinaryFile path ReadMode $ \h -> do
     shapeStrs = filter (/= "") $ splitOn "," $ filter (`notElem`"()") (metadata M.! "shape:")
     sh = map (read @Integer) shapeStrs
     -- Calculates the total number of elements in the array
-    --sz = product sh
   -- Reads the array itself into a list
   reifyDType dtype (loadPayload h sh)
-
--- Try it! It will probably break easily
-
--- withTempFile
-testsave :: IO ()
-testsave = do saveNpy "./src/testout/test123.npy" (NdArray [3] (V.fromList [1,2,3 :: Float]) )
-
-testload :: IO ()
-testload = do
-  nd <- loadNpy "./src/testout/test123.npy"
-  putStrLn $ show $ nd
-
-{-
--- Reads the array itself into a list
-  l <- traverse id $ case dtype of 
-    "<i8" -> buffInts h sz
-    --"<i4" -> 
-    --"<i8" ->
-    "<f4" -> buffFloats h sz
-    --"<f8" ->
-    --"<?"  ->
-    --"<U1" -> 
-    _     -> error "Unsupported dtype."
-  -- Converts the list & shape to an NdArray
-  pure $ NdArray sh (V.fromList l)
--}
