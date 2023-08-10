@@ -14,9 +14,6 @@ import Typing
 import qualified DType
 import DType (DType)
 
-data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
-
--- * Indexing & Slicing
 {- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
 we convert between the vector index, i, and multi-dimension index, [x,y,z,...], using the 
 shape of the array, [sx,sy,sz,...], as follows: 
@@ -29,10 +26,16 @@ shape of the array, [sx,sy,sz,...], as follows:
   ...
 -}
 
-generateIndicies :: [Integer] -> [[Integer]]
-generateIndicies = foldr (\x xs -> [ (i:t) | i <- [0..(x-1)], t <- xs]) [[]]
--- foldr (\x xs -> [ (i:t) | i <- [0..x], t <- xs]) [[]] [2,3,2]
+-- * INDEXING
 
+-- | Generates the list of all multi-dimensional indicies for a given shape
+generateIndicies :: [Integer] -> [[Integer]]
+generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
+
+{- | Generates two maps to convert between the single dimension index of the 
+underlying vector and the multi-dimensional index of the NdArray and back, 
+given the NdArray shape.
+-}
 mapIndicies :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
 mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
   where 
@@ -40,15 +43,13 @@ mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
     oneDkey = zip [0..] twoDinds
     twoDkey = zip twoDinds [0..]
 
--- Unsafe: Indexes the vector with the multi-index using a mapping 
+-- Indexes a vector with an NdArray multi-index using a mapping (unsafe).
 vecInd :: forall a . DType a => M.Map [Integer] Int -> Vector a -> [Integer] -> a
 vecInd mapp v i = v V.! (mapp M.! i)
---vecInd mapp v i = case v =@= (undefined :: Vector a) of
---  Just HRefl -> v V.! (mapp M.! i)
 
 -- | Converts a shape and multi-index to a 1D index.
 collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd sh indicies = collapseRun (reverse$sh) (reverse$indicies) 1
+collapseInd sh indicies = collapseRun (reverse sh) (reverse indicies) 1
 
 -- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
@@ -58,7 +59,7 @@ collapseRun (s:ss) (x:xs) runSize = x*runSize + collapseRun ss xs (s*runSize)
 
 -- | Converts a shape and 1D index to a multi-index.
 expandInd :: [Integer] -> Integer -> [Integer]
-expandInd sh i = reverse $ expandRun (reverse$sh) i 1
+expandInd sh i = reverse $ expandRun (reverse sh) i 1
 
 -- Helper for expandInd
 expandRun :: [Integer] -> Integer -> Integer -> [Integer]
@@ -70,9 +71,9 @@ expandRun (s:ss) i runSize = x : expandRun ss i (s*runSize)
 map1DIndex :: [Integer] -> [Integer] -> Integer -> Integer
 map1DIndex s r i = collapseInd r (expandInd s i)
 
--- | Checks an index does not exceed the shape
+-- | Checks an index does not exceed the shape.
 validIndex :: NdArray -> [Integer] -> Bool
-validIndex (NdArray s _) i = (length i == length s) && (and $ zipWith lessAbs i s)
+validIndex (NdArray s _) i = (length i == length s) && and (zipWith lessAbs i s)
   where lessAbs x y = (0 <= x && x < y) || (0 < -x && -x <= y)
 
 {- | Takes a multi-dimensional index and returns the value in the NdArray at that position.
@@ -86,7 +87,7 @@ value for the array e.g. 0. To avoid this use !?.
 -- >>> m #! [50] :: Int
 -- 0
 (#!) :: DType a => NdArray -> [Integer] -> a
-(NdArray s v) #! i = case (NdArray s v) !? i of
+(NdArray s v) #! i = case NdArray s v !? i of
   Just val -> val
   Nothing -> DType.addId :: DType a => a
 
@@ -110,40 +111,49 @@ value for the array e.g. 0. To avoid this use !?.
         Nothing -> Nothing
     else Nothing
 
+-- * SLICING
+
+-- | Type which allows you to provide only a single index or a range of indicies.
+data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
+
+-- | Integrated indexing and slicing. For each dimension you can provide either a single value
+-- or a range of values where a slice will be taken.
 (#!+) :: NdArray -> [IndexRange] -> NdArray
 (#!+) (NdArray sh v) irs = sliceWithMap m 0 (map forceRange irs) (NdArray sh v)
   where (m,_) = mapIndicies sh
 
+-- Converts an IndexRange to a range of indicies in the standard pair form.
 forceRange :: IndexRange -> (Integer, Integer)
 forceRange (I i) = (i,i)
 forceRange (R s t) = (s,t)
 
+-- Converts negative indicies to their positive equivalents, counting back
+-- from the end of the array (i.e. -1 is the last element).
 positiveInd :: (Ord a, Num a) => a -> a -> a
 positiveInd s i = if i < 0 then s+i else i
 
---(!?+) :: NdArray -> [IndexRange] -> Maybe NdArray
---(!?+) = undefined
-
 {- | Takes a series of ranges corresponding to each dimension in the array and returns
-the sub-array. -}
+the sub-array. Indicies are inclusive and can be negative. -}
 slice :: [(Integer, Integer)] -> NdArray -> NdArray
 slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
   where (m,_) = mapIndicies sh
 
+-- | Equivalent slicing operator.
 (!/) :: NdArray -> [(Integer, Integer)] -> NdArray
 (!/) nd ss = slice ss nd
 
--- helper
+-- Takes a slice on an NdArray given the mapping from the vector index to NdArray index.
+-- Iterates through each dimension of the slice one at a time. 
 sliceWithMap :: M.Map Int [Integer] -> Int -> [(Integer, Integer)] -> NdArray -> NdArray
 sliceWithMap _ _ [] nd = nd
-sliceWithMap _ d _ (NdArray sh v) | d >= length sh = (NdArray sh v)
+sliceWithMap _ d _ (NdArray sh v) | d >= length sh = NdArray sh v
 sliceWithMap m d (s : ss) (NdArray sh v) = sliceWithMap m (d+1) ss $ 
   sliceDim s d m (NdArray sh v)
 
--- inclusive, supports negatives
+-- Takes a slice of an NdArray at a particular dimension.
 sliceDim :: (Integer, Integer) -> Int -> M.Map Int [Integer] -> NdArray -> NdArray
 sliceDim (x,y) d m (NdArray sh v) = 
-  if d >= length sh then error "Given dimension does not exist in array."
+  if d >= length sh then throw (ExceededShape d sh)
   else NdArray
     (if y' < x' then [] else shrinkNth d (y'-x'+1) sh)
     (V.ifilter
