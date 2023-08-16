@@ -4,9 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Numskull (
-  -- Metadata
+  -- * Metadata
   DType
   , size
   , shape
@@ -15,11 +17,11 @@ module Numskull (
   , checkNdType
   , isEmpty
 
-  -- Creation
+  -- * Creation
   , NdArray
   , fromList
   , fromListFlat
-  , TreeMatrix
+  , TreeMatrix (..)
   , fromMatrix
   , fromVector
   , singleton
@@ -27,7 +29,10 @@ module Numskull (
   , zeros
   , squareArr
 
-  -- General mapping, folding & zipping
+  -- * Modification
+  , update
+
+  -- * General Mapping, Folding & Zipping
   , foldrA
   , mapA
   , mapTransform
@@ -35,12 +40,12 @@ module Numskull (
   , pointwiseBool
   , zipArrayWith
 
-  -- Summaries
+  -- * Summaries
   , origin
   , maxElem
   , minElem
 
-  -- Mathematical constant
+  -- * Mathematical constant
   , scale
   , absA
   , signumA
@@ -53,7 +58,7 @@ module Numskull (
   , shiftleftA
   , shiftrightA
 
-  -- Mathematical pointwise
+  -- * Mathematical pointwise
   , elemDivide
   , elemDiv
   , elemPow
@@ -61,17 +66,17 @@ module Numskull (
   , Numskull.sum
   , mean
 
-  -- Bounds
+  -- * Bounds
   , clip
 
-  -- Type Conversions
+  -- * Type Conversions
   , convertDTypeTo
   , matchDType
 
-  -- Size conversions
+  -- * Size Conversions
   , resize
 
-  -- Shape conversions/manipulations
+  -- * Shape Conversions/Manipulations
   , reshape
   , padShape
   , constrainShape
@@ -79,13 +84,13 @@ module Numskull (
   , concatAlong
   , gather
 
-  -- Matrix manipulation
+  -- * Matrix Manipulation
   , swapRows
   , diagonal
   , transpose
   , transposePerm
 
-  --Matrix multiplication
+  -- * Matrix Multiplication
   , dot
   , matMul
   , upperTriangle
@@ -94,29 +99,28 @@ module Numskull (
   , swapRowsWith0Pivot
   , gemm
 
-  -- Indexing
-  , IndexRange
+  -- * Indexing
   , collapseInd
   , expandInd
   , map1DIndex
   , validIndex
   , (#!)
-  , (!?)
-  , (#!+)
+  , (#?)
   , slice
-  , (!/)
+  , (/!)
+  , evalSlice
+  , q
 
-  -- Pretty printing
+  -- * Pretty Printing
   , printArray
   , prettyShowArray
 
-  -- typing
+  -- Typing
   , (=@=)
 
-  -- numpy serialisation
+  -- Numpy Serialisation
   , saveNpy
   , loadNpy
-
 ) where
 
 import qualified DType
@@ -127,6 +131,8 @@ import           NdArray
 import           NdArrayException
 import           Serialisation
 import           Typing
+import           QuasiSlice
+import           QuasiSlice.Quote
 
 import           Control.Exception
 import           Control.Monad        (zipWithM)
@@ -303,6 +309,16 @@ zeros _ s = NdArray s zerovec
   where
     ident = DType.addId :: (DType a => a)
     zerovec = V.replicate (size s) ident :: DType a => Vector a
+
+update :: forall a . DType a => NdArray -> [Integer] -> a -> NdArray
+update (NdArray s v) ind val = 
+  NdArray s $ V.force (v V.// [(ind', val')])
+  where
+    ind' = fromIntegral $ collapseInd s ind :: Int
+    val' = matchVecType v val
+
+matchVecType :: forall a b . (DType a, DType b) => Vector a -> b -> a
+matchVecType _ x = DType.rationalToDtype (DType.dtypeToRational x) :: a
 
 -- * Pointwise Functions
 --------------------------------------------------------------------------------
@@ -813,9 +829,9 @@ invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm
 
 -- * Multiplication
 
--- | Dot product over matrices of the same shape.
-dot :: DType a => NdArray -> NdArray -> a
-dot nd1 nd2 = foldrA DType.add DType.addId (nd1*nd2)
+-- | Dot product over matricies of the same shape.
+dot :: forall a. DType a => NdArray -> NdArray -> a
+dot (NdArray s v) nd2 = foldrA DType.add (identityElem v <-@ typeRep @a) ((NdArray s v)*nd2)
 
 -- | Standard matrix multiplication following NumPy conventions.
 -- 1D arrays have the extra dimension pre/appended
@@ -827,20 +843,20 @@ matMul (NdArray s v) (NdArray r u) =
     Just HRefl ->
       case (reverse s, reverse r) of
         -- Standard matrix multiplication
-        ([m, n], [q, p]) | m == p -> NdArray [n,q] (matMulVec s v r u)
+        ([m, n], [o, p]) | m == p -> NdArray [n,o] (matMulVec s v r u)
         -- 1D arrays have the extra dimension pre/appended then result collapses back to 1D
-        ([m], [q, p])   | m == p -> NdArray [q] (matMulVec [1,m] v r u)
+        ([m], [o, p])   | m == p -> NdArray [o] (matMulVec [1,m] v r u)
         ([m, n], [p])   | m == p -> NdArray [n] (matMulVec s v [p,1] u)
         -- ND-arrays are broadcast to match each other where possible and treated as
         -- stacks of nxm/pxq arrays.
-        (m : n : _, q : p : _) | m == p ->
+        (m : n : _, o : p : _) | m == p ->
           let
             (s', v', _r', u') = broadcastDimensions s v r u
             stackA = vectorChunksOf (fromIntegral @Integer @Int $ m * n) v'
-            stackB = vectorChunksOf (fromIntegral @Integer @Int $ q * p) u'
-            stackAB = zipWith4 matMulVec (repeat [n,m]) stackA (repeat [p,q]) stackB
+            stackB = vectorChunksOf (fromIntegral @Integer @Int $ o * p) u'
+            stackAB = zipWith4 matMulVec (repeat [n,m]) stackA (repeat [p,o]) stackB
           in
-            NdArray (take (length s' -2) s' ++ [n,q]) $ V.concat stackAB
+            NdArray (take (length s' -2) s' ++ [n,o]) $ V.concat stackAB
         _ -> throw (ShapeMismatch (NdArray s v) (NdArray r u) "matMul")
     _ -> throw (DTypeMismatch (NdArray s v) (NdArray r u) "matMul")
 
@@ -980,8 +996,8 @@ If the matrix is non-square it is assumed to be padded out and will have determi
 determinant :: forall a . DType a => NdArray -> [a]
 determinant (NdArray s v) = case s of
   [] -> []
-  [_] -> [DType.addId :: a]
-  [_,_] -> [determinant2D (NdArray s v)]
+  [_] -> [identityElem v <-@ typeRep @a]
+  [_,_] -> [determinant2D (NdArray s v)] :: [a]
   _ | V.null v -> []
   _ ->
     let
@@ -996,9 +1012,9 @@ https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/M
 determinant2D :: forall a . DType a => NdArray -> a
 determinant2D nd =
   case shape nd of
-    -- 2x2 matrices are calculated quickly with the standard ad-bc
-    [2,2] -> determinant2x2 nd
-    -- nxn matrices are row-swapped to find an arrangement with no zeros/identity elements
+    -- 2x2 matricies are calculated quickly with the standard ad-bc
+    [2,2] -> determinant2x2 nd :: a
+    -- nxn matricies are row-swapped to find an arrangement with no zeros/identity elements
     -- in the leading diagonal (pivots) then put into upper triangle form
     [c,r] | c == r && not (zeroRow nd) -> case swapRowsWith0Pivot nd of
             Just (NdArray s v) ->
@@ -1008,10 +1024,10 @@ determinant2D nd =
                 pivots = diagonalVec s upperTriV
               in
                 -- determinant is the product of the pivots in upper triangle form
-                V.foldr DType.multiply (DType.multId :: a) pivots
+                V.foldr DType.multiply (DType.multId :: a) pivots :: a
     -- If the matrix is non-square or has a zero-row/column, it is singular.
-            Nothing -> DType.addId
-    [_,_] -> DType.addId
+            Nothing -> DType.addId :: a
+    [_,_] -> DType.addId :: a
     _ -> error "Given matrix is not 2D."
 
 -- 2x2 quick determinant calculation of ad-bc
