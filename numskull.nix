@@ -1,4 +1,4 @@
-{ mkDerivation, base, doctest, hspec, lib, QuickCheck, split
+{ mkDerivation, base, lib, split
 , vector
 }:
 mkDerivation {
@@ -7,7 +7,7 @@ mkDerivation {
   src = ./.;
   libraryHaskellDepends = [ base split vector ];
   testHaskellDepends = [
-    base doctest hspec QuickCheck split vector
+    base split vector
   ];
   license = lib.licenses.mit;
 }
