@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
+{-# QuasiQuotes #-}
 
 module Indexing where
 
@@ -9,12 +10,15 @@ import qualified Data.Vector.Storable as V
 import Data.Vector.Storable (Vector)
 import qualified Data.Map as M
 import Type.Reflection
+import Text.ParserCombinators.Parsec
 
 import NdArray
 import Typing
 import qualified DType
 import DType (DType)
 import NdArrayException
+
+
 
 {- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
 we convert between the vector index, i, and multi-dimension index, [x,y,z,...], using the 
