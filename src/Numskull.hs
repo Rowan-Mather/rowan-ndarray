@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Numskull (
   -- Metadata
@@ -117,6 +118,9 @@ module Numskull (
   , saveNpy
   , loadNpy
 
+  , evalSlice
+  , expr
+
 ) where
 
 import qualified DType
@@ -127,6 +131,8 @@ import           NdArray
 import           NdArrayException
 import           Serialisation
 import           Typing
+import           QuasiSlice
+import           QuasiSlice.Quote
 
 import           Control.Exception
 import           Control.Monad        (zipWithM)

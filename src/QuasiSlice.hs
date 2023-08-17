@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-module QuasiSlice   (Expr(..),
-                    BinOp(..),
-                    eval,
+module QuasiSlice   (QuasiSlice(..),
+                    evalSlice,
                     parseExpr)
 where
 
@@ -11,25 +11,24 @@ import Indexing
 import Data.Generics
 import Text.ParserCombinators.Parsec
 
-data Expr  =  
-           |  IndexExpr (Maybe Integer)
-           |  AntiIndexExpr String
+data QuasiSlice =
+              IndexExpr (Maybe Integer)
+           -- |  AntiIndexExpr String
            |  SliceExpr (Maybe Integer) (Maybe Integer)
-           |  AntiSliceExpr String
-           |  CommaExpr Expr Expr
-           |  AntiCommaExpr String
+           -- |  AntiSliceExpr String
+           |  CommaExpr QuasiSlice QuasiSlice
+           -- |  AntiCommaExpr String
     deriving(Show, Typeable, Data)
 
-eval :: Expr -> [IndexRange]
-eval x = case x of 
+evalSlice :: QuasiSlice -> [IndexRange]
+evalSlice x = case x of
     IndexExpr Nothing           -> [R 0 (-1)]
     IndexExpr (Just i)          -> [I i]
     SliceExpr Nothing Nothing   -> [R 0 (-1)]
     SliceExpr Nothing (Just j)  -> [R 0 j]
     SliceExpr (Just i) Nothing  -> [R i (-1)]
     SliceExpr (Just i) (Just j) -> [R i j]
-    CommaExpr ex1 ex2           -> eval ex1 ++ eval ex2
-
+    CommaExpr ex1 ex2           -> evalSlice ex1 ++ evalSlice ex2
 
 ------------ PARSER
 
@@ -43,41 +42,63 @@ lexeme p     = do{ x <- p; spaces; return x  }
 symbol name  = lexeme (string name)
 --parens p     = between (symbol "(") (symbol ")") p
 
-expr :: CharParser st Expr
-expr = sliceIndex `chainl1` comma
-
 comma = do{ symbol ","; return $ CommaExpr }
---colon = do{ symbol ":"; return $ SliceExpr }
 
-sliceIndex :: CharParser st Expr
-sliceIndex = index <|> 
-             sliceWhole <|> sliceLeft <|> sliceRight <|> sliceEmpty <|>
-             try antiIntExpr <|> antiExpr
+indiciesExpr :: CharParser st QuasiSlice
+indiciesExpr = sliceIndex `chainl1` comma
 
-index :: CharParser st Expr
-index = lexeme $ do{ ds <- many1 digit ; return $ IndexExpr (Just $ read ds) }
- 
-sliceWhole :: CharParser st Expr
-sliceWhole = lexeme $ do{ d1s <- many1 digit ; symbol ":" ; d2s <- many1 digit ; return $ SliceExpr (Just $ read d1s) (Just $ read d2s) }
+sliceIndex :: CharParser st QuasiSlice
+sliceIndex = lexeme $ do 
+  d1s <- many digit
+  s <- optionMaybe $ symbol ":"
+  d2s <- many digit
+  let l = if d1s == [] then Nothing else Just (read d1s)
+  let r = if d2s == [] then Nothing else Just (read d2s) 
+  case s of 
+    Nothing -> return $ IndexExpr l
+    Just _ -> return $ SliceExpr l r
+{-
+sliceIndex :: CharParser st QuasiSlice
+sliceIndex = sliceExpr <|> indexExpr  
+             
+index :: CharParser st QuasiSlice
+index = lexeme $ do
+  ds <- many1 digit
+  --let i = if ds == [] then Nothing else Just (read ds)
+  return $ IndexExpr $ Just (read ds)
 
-sliceLeft :: CharParser st Expr
+sliceExpr :: CharParser st QuasiSlice
+sliceExpr = try $ lexeme $ do 
+  d1s <- many digit
+  symbol ":"
+  d2s <- many digit
+  let l = if d1s == [] then Nothing else Just (read d1s)
+  let r = if d2s == [] then Nothing else Just (read d2s) 
+  return $ SliceExpr l r
+-}
+{-
+indexEmpty :: CharParser st QuasiSlice
+indexEmpty = lexeme $ do{ return $ IndexExpr Nothing }
+
+sliceLeft :: CharParser st QuasiSlice
 sliceLeft = lexeme $ do{ ds <- many1 digit ; symbol ":" ; return $ SliceExpr (Just $ read ds) Nothing }
 
-sliceRight :: CharParser st Expr
+sliceRight :: CharParser st QuasiSlice
 sliceRight = lexeme $ do{ symbol ":" ; ds <- many1 digit ; return $ SliceExpr Nothing (Just $ read ds) }
 
-sliceEmpty :: CharParser st Expr
+sliceEmpty :: CharParser st QuasiSlice
 sliceEmpty = lexeme $ do{ symbol ":"; return $ SliceExpr Nothing Nothing }
 
-ident  :: CharParser s String
-ident  =  do{ c <- small; cs <- many idchar; return (c:cs) }
-
-antiIntExpr  = lexeme $ do{ symbol "$int:"; id <- ident; return $ AntiIntExpr id }
-antiExpr     = lexeme $ do{ symbol "$"; id <- ident; return $ AntiExpr id }
+--ident  :: CharParser s String
+--ident  =  do{ c <- small; cs <- many idchar; return (c:cs) }
+-}
+-- To include variables in scope not just integers
+--antiIntExpr  = lexeme $ do{ symbol "$int:"; id <- ident; return $ AntiIntExpr id }
+--antiExpr     = lexeme $ do{ symbol "$"; id <- ident; return $ AntiExpr id }
 
 ---------------
 
-parseExpr :: (Monad m, MonadFail m) => (String, Int, Int) -> String -> m Expr
+parseExpr :: (Monad m, MonadFail m) => (String, Int, Int) -> String -> m QuasiSlice
 parseExpr (file, line, col) s =
     case runParser p () "" s of
       Left err  -> fail $ show err
@@ -90,6 +111,6 @@ parseExpr (file, line, col) s =
               (flip setSourceColumn) col $
               pos
             spaces
-            e <- expr
+            e <- indiciesExpr
             eof
             return e
