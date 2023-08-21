@@ -21,13 +21,16 @@ module Numskull (
   , NdArray
   , fromList
   , fromListFlat
-  , TreeMatrix
+  , TreeMatrix (..)
   , fromMatrix
   , fromVector
   , singleton
   , arange
   , zeros
   , squareArr
+
+  -- Modification
+  , update
 
   -- General mapping, folding & zipping
   , foldrA
@@ -310,6 +313,16 @@ zeros _ s = NdArray s zerovec
   where
     ident = DType.addId :: (DType a => a)
     zerovec = V.replicate (size s) ident :: DType a => Vector a
+
+update :: forall a . DType a => NdArray -> [Integer] -> a -> NdArray
+update (NdArray s v) ind val = 
+  NdArray s $ V.force (v V.// [(ind', val')])
+  where
+    ind' = fromIntegral $ collapseInd s ind :: Int
+    val' = matchVecType v val
+
+matchVecType :: forall a b . (DType a, DType b) => Vector a -> b -> a
+matchVecType _ x = DType.rationalToDtype (DType.dtypeToRational x) :: a
 
 -- * Pointwise Functions
 --------------------------------------------------------------------------------
