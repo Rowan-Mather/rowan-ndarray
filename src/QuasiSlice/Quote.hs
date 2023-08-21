@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module QuasiSlice.Quote (expr) where
+module QuasiSlice.Quote (q) where
 
 import Data.Generics
 import qualified Language.Haskell.TH as TH
@@ -12,8 +12,8 @@ import QuasiSlice
 quoteExprExp :: String -> TH.ExpQ
 --quoteExprPat :: String -> TH.PatQ
 
-expr :: QuasiQuoter
-expr = QuasiQuoter { quoteExp = quoteExprExp
+q :: QuasiQuoter
+q = QuasiQuoter { quoteExp = quoteExprExp
 --                   ,    quotePat = quoteExprPat
                       -- with ghc >= 7.4, you could also
                       -- define quoteType and quoteDec for

@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Numskull (
@@ -119,7 +120,7 @@ module Numskull (
   , loadNpy
 
   , evalSlice
-  , expr
+  , q
 
 ) where
 

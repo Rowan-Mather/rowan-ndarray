@@ -1,15 +1,18 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# QuasiQuotes #-}
 
-module QuasiSlice   (QuasiSlice(..),
+module QuasiSlice   (IndexRange(..),
+                    QuasiSlice(..),
                     evalSlice,
                     parseExpr)
 where
 
-import Indexing
-
 import Data.Generics
 import Text.ParserCombinators.Parsec
+
+-- | Type which allows you to provide only a single index or a range of indicies.
+data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 
 data QuasiSlice =
               IndexExpr (Maybe Integer)

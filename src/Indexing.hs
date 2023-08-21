@@ -1,7 +1,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
-{-# QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Indexing where
 
@@ -17,7 +18,8 @@ import Typing
 import qualified DType
 import DType (DType)
 import NdArrayException
-
+import QuasiSlice
+import QuasiSlice.Quote
 
 
 {- | Arrays are stored as vectors with a shape. Since vectors only have one dimension,
@@ -119,9 +121,6 @@ value for the array e.g. 0. To avoid this use !?.
 
 -- * SLICING
 
--- | Type which allows you to provide only a single index or a range of indicies.
-data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
-
 -- | Integrated indexing and slicing. For each dimension you can provide either a single value
 -- or a range of values where a slice will be taken.
 (#!+) :: NdArray -> [IndexRange] -> NdArray
@@ -132,6 +131,9 @@ data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 forceRange :: IndexRange -> (Integer, Integer)
 forceRange (I i) = (i,i)
 forceRange (R s t) = (s,t)
+
+(!) :: NdArray -> QuasiSlice -> NdArray
+(!) nd sl = nd #!+ (evalSlice sl)
 
 -- Converts negative indicies to their positive equivalents, counting back
 -- from the end of the array (i.e. -1 is the last element).
