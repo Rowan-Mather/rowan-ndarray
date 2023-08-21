@@ -8,7 +8,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 
 module Numskull (
-  -- Metadata
+  -- * Metadata
   DType
   , size
   , shape
@@ -17,7 +17,7 @@ module Numskull (
   , checkNdType
   , isEmpty
 
-  -- Creation
+  -- * Creation
   , NdArray
   , fromList
   , fromListFlat
@@ -29,10 +29,10 @@ module Numskull (
   , zeros
   , squareArr
 
-  -- Modification
+  -- * Modification
   , update
 
-  -- General mapping, folding & zipping
+  -- * General Mapping, Folding & Zipping
   , foldrA
   , mapA
   , mapTransform
@@ -40,12 +40,12 @@ module Numskull (
   , pointwiseBool
   , zipArrayWith
 
-  -- Summaries
+  -- * Summaries
   , origin
   , maxElem
   , minElem
 
-  -- Mathematical constant
+  -- * Mathematical constant
   , scale
   , absA
   , signumA
@@ -58,7 +58,7 @@ module Numskull (
   , shiftleftA
   , shiftrightA
 
-  -- Mathematical pointwise
+  -- * Mathematical pointwise
   , elemDivide
   , elemDiv
   , elemPow
@@ -66,17 +66,17 @@ module Numskull (
   , Numskull.sum
   , mean
 
-  -- Bounds
+  -- * Bounds
   , clip
 
-  -- Type Conversions
+  -- * Type Conversions
   , convertDTypeTo
   , matchDType
 
-  -- Size conversions
+  -- * Size Conversions
   , resize
 
-  -- Shape conversions/manipulations
+  -- * Shape Conversions/Manipulations
   , reshape
   , padShape
   , constrainShape
@@ -84,13 +84,13 @@ module Numskull (
   , concatAlong
   , gather
 
-  -- Matrix manipulation
+  -- * Matrix Manipulation
   , swapRows
   , diagonal
   , transpose
   , transposePerm
 
-  --Matrix multiplication
+  -- * Matrix Multiplication
   , dot
   , matMul
   , upperTriangle
@@ -99,7 +99,7 @@ module Numskull (
   , swapRowsWith0Pivot
   , gemm
 
-  -- Indexing
+  -- * Indexing
   , IndexRange
   , collapseInd
   , expandInd
@@ -110,21 +110,20 @@ module Numskull (
   , (#!+)
   , slice
   , (/!)
-
-  -- Pretty printing
-  , printArray
-  , prettyShowArray
-
-  -- typing
-  , (=@=)
-
-  -- numpy serialisation
-  , saveNpy
-  , loadNpy
-
   , evalSlice
   , q
 
+
+  -- * Pretty Printing
+  , printArray
+  , prettyShowArray
+
+  -- Typing
+  , (=@=)
+
+  -- Numpy Serialisation
+  , saveNpy
+  , loadNpy
 ) where
 
 import qualified DType

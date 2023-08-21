@@ -18,12 +18,12 @@ library
                       , NdArray
                       , NdArrayException
                       , DType
-                      , MatrixForm
-                      , Indexing
-                      , QuasiSlice
-                      , QuasiSlice.Quote
-                      , Typing
-                      , Serialisation
+                      --, MatrixForm
+                      --, Indexing
+                      --, QuasiSlice
+                      --, QuasiSlice.Quote
+                      --, Typing
+                      --, Serialisation
     -- other-modules:
     -- other-extensions:
     build-depends:    base >=4.13.0.0
