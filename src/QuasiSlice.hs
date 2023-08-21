@@ -1,15 +1,17 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# QuasiQuotes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module QuasiSlice   (IndexRange(..),
                     QuasiSlice(..),
                     evalSlice,
-                    parseExpr)
+                    parseSlice)
 where
 
-import Data.Generics
+--import Data.Generics
 import Text.ParserCombinators.Parsec
+import Data.Typeable
+import Data.Data
 
 -- | Type which allows you to provide only a single index or a range of indicies.
 data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
@@ -101,8 +103,8 @@ sliceEmpty = lexeme $ do{ symbol ":"; return $ SliceExpr Nothing Nothing }
 
 ---------------
 
-parseExpr :: (Monad m, MonadFail m) => (String, Int, Int) -> String -> m QuasiSlice
-parseExpr (file, line, col) s =
+parseSlice :: (Monad m, MonadFail m) => (String, Int, Int) -> String -> m QuasiSlice
+parseSlice (file, line, col) s =
     case runParser p () "" s of
       Left err  -> fail $ show err
       Right e   -> return e

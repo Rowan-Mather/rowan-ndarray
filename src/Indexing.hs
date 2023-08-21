@@ -95,7 +95,7 @@ value for the array e.g. 0. To avoid this use !?.
 -- >>> m #! [50] :: Int
 -- 0
 (#!) :: DType a => NdArray -> [Integer] -> a
-(NdArray s v) #! i = case NdArray s v !? i of
+(NdArray s v) #! i = case NdArray s v #? i of
   Just val -> val
   Nothing -> DType.addId :: DType a => a
 
@@ -105,8 +105,8 @@ value for the array e.g. 0. To avoid this use !?.
 -- Just 4
 -- >>> m !? [50] :: Maybe Int
 -- Nothing
-(!?) :: forall a . DType a => NdArray -> [Integer] -> Maybe a
-(NdArray s v) !? i =
+(#?) :: forall a . DType a => NdArray -> [Integer] -> Maybe a
+(NdArray s v) #? i =
   let
     -- Converts any negative indicies to their equivalent positives
     positives = zipWith positiveInd s i
@@ -132,8 +132,8 @@ forceRange :: IndexRange -> (Integer, Integer)
 forceRange (I i) = (i,i)
 forceRange (R s t) = (s,t)
 
-(!) :: NdArray -> QuasiSlice -> NdArray
-(!) nd sl = nd #!+ (evalSlice sl)
+(/!) :: NdArray -> QuasiSlice -> NdArray
+(/!) nd sl = nd #!+ (evalSlice sl)
 
 -- Converts negative indicies to their positive equivalents, counting back
 -- from the end of the array (i.e. -1 is the last element).
@@ -147,8 +147,8 @@ slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
   where (m,_) = mapIndicies sh
 
 -- | Equivalent slicing operator.
-(!/) :: NdArray -> [(Integer, Integer)] -> NdArray
-(!/) nd ss = slice ss nd
+--(!/) :: NdArray -> [(Integer, Integer)] -> NdArray
+--(!/) nd ss = slice ss nd
 
 -- Takes a slice on an NdArray given the mapping from the vector index to NdArray index.
 -- Iterates through each dimension of the slice one at a time. 

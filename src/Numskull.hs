@@ -103,10 +103,10 @@ module Numskull (
   , map1DIndex
   , validIndex
   , (#!)
-  , (!?)
+  , (#?)
   , (#!+)
   , slice
-  , (!/)
+  , (/!)
 
   -- Pretty printing
   , printArray
@@ -821,8 +821,8 @@ invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm
 -- * Multiplication
 
 -- | Dot product over matricies of the same shape.
-dot :: DType a => NdArray -> NdArray -> a
-dot nd1 nd2 = foldrA DType.add DType.addId (nd1*nd2)
+dot :: forall a. DType a => NdArray -> NdArray -> a
+dot (NdArray s v) nd2 = foldrA DType.add (identityElem v <-@ typeRep @a) ((NdArray s v)*nd2)
 
 -- | Standard matrix multiplication following NumPy conventions.
 -- 1D arrays have the extra dimension pre/appended
@@ -834,20 +834,20 @@ matMul (NdArray s v) (NdArray r u) =
     Just HRefl ->
       case (reverse s, reverse r) of
         -- Standard matrix multiplication
-        ([m, n], [q, p]) | m == p -> NdArray [n,q] (matMulVec s v r u)
+        ([m, n], [o, p]) | m == p -> NdArray [n,o] (matMulVec s v r u)
         -- 1D arrays have the extra dimension pre/appended then result collapses back to 1D
-        ([m], [q, p])   | m == p -> NdArray [q] (matMulVec [1,m] v r u)
+        ([m], [o, p])   | m == p -> NdArray [o] (matMulVec [1,m] v r u)
         ([m, n], [p])   | m == p -> NdArray [n] (matMulVec s v [p,1] u)
         -- ND-arrays are broadcast to match each other where possible and treated as
         -- stacks of nxm/pxq arrays.
-        (m : n : _, q : p : _) | m == p ->
+        (m : n : _, o : p : _) | m == p ->
           let
             (s', v', _r', u') = broadcastDimensions s v r u
             stackA = vectorChunksOf (fromIntegral @Integer @Int $ m * n) v'
-            stackB = vectorChunksOf (fromIntegral @Integer @Int $ q * p) u'
-            stackAB = zipWith4 matMulVec (repeat [n,m]) stackA (repeat [p,q]) stackB
+            stackB = vectorChunksOf (fromIntegral @Integer @Int $ o * p) u'
+            stackAB = zipWith4 matMulVec (repeat [n,m]) stackA (repeat [p,o]) stackB
           in
-            NdArray (take (length s' -2) s' ++ [n,q]) $ V.concat stackAB
+            NdArray (take (length s' -2) s' ++ [n,o]) $ V.concat stackAB
         _ -> throw (ShapeMismatch (NdArray s v) (NdArray r u) "matMul")
     _ -> throw (DTypeMismatch (NdArray s v) (NdArray r u) "matMul")
 
@@ -987,8 +987,8 @@ If the matrix is non-square it is assumed to be padded out and will have determi
 determinant :: forall a . DType a => NdArray -> [a]
 determinant (NdArray s v) = case s of
   [] -> []
-  [_] -> [DType.addId :: a]
-  [_,_] -> [determinant2D (NdArray s v)]
+  [_] -> [identityElem v <-@ typeRep @a]
+  [_,_] -> [determinant2D (NdArray s v)] :: [a]
   _ | V.null v -> []
   _ ->
     let
@@ -1004,7 +1004,7 @@ determinant2D :: forall a . DType a => NdArray -> a
 determinant2D nd =
   case shape nd of
     -- 2x2 matricies are calculated quickly with the standard ad-bc
-    [2,2] -> determinant2x2 nd
+    [2,2] -> determinant2x2 nd :: a
     -- nxn matricies are row-swapped to find an arrangement with no zeros/identity elements
     -- in the leading diagonal (pivots) then put into upper triangle form
     [c,r] | c == r && not (zeroRow nd) -> case swapRowsWith0Pivot nd of
@@ -1015,10 +1015,10 @@ determinant2D nd =
                 pivots = diagonalVec s upperTriV
               in
                 -- determinant is the product of the pivots in upper triangle form
-                V.foldr DType.multiply (DType.multId :: a) pivots
+                V.foldr DType.multiply (DType.multId :: a) pivots :: a
     -- If the matrix is non-square or has a zero-row/column, it is singular.
-            Nothing -> DType.addId
-    [_,_] -> DType.addId
+            Nothing -> DType.addId :: a
+    [_,_] -> DType.addId :: a
     _ -> error "Given matrix is not 2D."
 
 -- 2x2 quick determinant calculation of ad-bc

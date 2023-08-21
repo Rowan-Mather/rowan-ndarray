@@ -2,14 +2,13 @@
 
 module QuasiSlice.Quote (q) where
 
-import Data.Generics
+--import Data.Generics
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax(liftData)
 
 import QuasiSlice
 
-quoteExprExp :: String -> TH.ExpQ
 --quoteExprPat :: String -> TH.PatQ
 
 q :: QuasiQuoter
@@ -20,11 +19,12 @@ q = QuasiQuoter { quoteExp = quoteExprExp
                       -- quasiquotes in those places too
                     }
 -------
+quoteExprExp :: String -> TH.ExpQ
 quoteExprExp s =  do  loc <- TH.location
                       let pos =  (TH.loc_filename loc,
                                  fst (TH.loc_start loc),
                                  snd (TH.loc_start loc))
-                      expr <- parseExpr pos s
+                      expr <- parseSlice pos s
                       --dataToExpQ (\x -> Nothing) expr
                       liftData expr
                       --dataToExpQ (const Nothing `extQ` antiExprExp) expr
