@@ -100,19 +100,16 @@ module Numskull (
   , gemm
 
   -- * Indexing
-  , IndexRange
   , collapseInd
   , expandInd
   , map1DIndex
   , validIndex
   , (#!)
   , (#?)
-  , (#!+)
   , slice
   , (/!)
   , evalSlice
   , q
-
 
   -- * Pretty Printing
   , printArray

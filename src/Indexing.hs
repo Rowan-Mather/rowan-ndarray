@@ -119,32 +119,38 @@ value for the array e.g. 0. To avoid this use !?.
         Nothing -> Nothing
     else Nothing
 
--- * SLICING
-
--- | Integrated indexing and slicing. For each dimension you can provide either a single value
--- or a range of values where a slice will be taken.
-(#!+) :: NdArray -> [IndexRange] -> NdArray
-(#!+) (NdArray sh v) irs = sliceWithMap m 0 (map forceRange irs) (NdArray sh v)
-  where (m,_) = mapIndicies sh
-
--- Converts an IndexRange to a range of indicies in the standard pair form.
-forceRange :: IndexRange -> (Integer, Integer)
-forceRange (I i) = (i,i)
-forceRange (R s t) = (s,t)
-
-(/!) :: NdArray -> QuasiSlice -> NdArray
-(/!) nd sl = nd #!+ (evalSlice sl)
-
 -- Converts negative indicies to their positive equivalents, counting back
 -- from the end of the array (i.e. -1 is the last element).
 positiveInd :: (Ord a, Num a) => a -> a -> a
 positiveInd s i = if i < 0 then s+i else i
 
+-- * SLICING
+
 {- | Takes a series of ranges corresponding to each dimension in the array and returns
-the sub-array. Indicies are inclusive and can be negative. -}
+the sub-array. Indicies are (inclusive, exclusive) but can be negative. -}
 slice :: [(Integer, Integer)] -> NdArray -> NdArray
-slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
+slice ss (NdArray sh v) = sliceWithMap m 0 (positiveRanges sh ss) (NdArray sh v)
   where (m,_) = mapIndicies sh
+
+positiveRanges :: [Integer] -> [(Integer, Integer)] -> [(Integer, Integer)]
+positiveRanges = zipWith (\s (x,y) -> (positiveInd s x, if y < 0 then s+y else y-1))
+
+-- Integrated indexing and slicing. For each dimension you can provide either a single value
+-- or a range of values where a slice will be taken.
+(#!+) :: NdArray -> [IndexRange] -> NdArray
+(#!+) (NdArray sh v) irs = sliceWithMap m 0 (zipWith forceRange sh irs) (NdArray sh v)
+  where (m,_) = mapIndicies sh
+
+-- Converts an IndexRange to a range of indicies in the standard pair form.
+forceRange :: Integer -> IndexRange -> (Integer, Integer)
+forceRange sh (I i) = (positiveInd sh i, positiveInd sh i)
+forceRange sh (R s t) = (positiveInd sh s, if t < 0 then positiveInd sh t else t-1)
+
+-- | The concise operator for slicing. Instead of providing an IndexRange, 
+-- You may QuasiQuote a NumPy-like index e.g. myArray /! [q|5,2:6,:3|].
+-- Unspecified values in ranges denote the start/end.
+(/!) :: NdArray -> QuasiSlice -> NdArray
+(/!) nd sl = nd #!+ (evalSlice sl)
 
 -- | Equivalent slicing operator.
 --(!/) :: NdArray -> [(Integer, Integer)] -> NdArray
@@ -158,21 +164,20 @@ sliceWithMap _ d _ (NdArray sh v) | d >= length sh = NdArray sh v
 sliceWithMap m d (s : ss) (NdArray sh v) = sliceWithMap m (d+1) ss $ 
   sliceDim s d m (NdArray sh v)
 
--- Takes a slice of an NdArray at a particular dimension.
+-- Takes a slice of an NdArray at a particular dimension, no -ve indices.
 sliceDim :: (Integer, Integer) -> Int -> M.Map Int [Integer] -> NdArray -> NdArray
 sliceDim (x,y) d m (NdArray sh v) = 
   if d >= length sh then throw (ExceededShape (fromIntegral d) sh)
   else NdArray
-    (if y' < x' then [] else shrinkNth d (y'-x'+1) sh)
+    (if y < x then [] else shrinkNth d (y-x+1) sh)
     (V.ifilter
       (\i _ ->
         let dimInd = (m M.! i) !! d
-        in x' <= dimInd && dimInd <= y') 
+        in x <= dimInd && dimInd <= y) 
       v
     )
   where
     dimSize = sh !! d 
-    (x', y') = (positiveInd dimSize x, positiveInd dimSize y)
 
 -- Replaces the nth value of an array if the newValue is smaller.
 -- https://stackoverflow.com/questions/5852722/replace-individual-list-elements-in-haskell
