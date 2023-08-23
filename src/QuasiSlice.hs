@@ -16,58 +16,69 @@ import Data.Data
 data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 
 data QuasiSlice =
-              IndexExpr (Maybe Integer)
-           -- |  AntiIndexExpr String
-           |  SliceExpr (Maybe Integer) (Maybe Integer)
+              NoIndexEx
+           |  IndexEx Integer
+           |  NegIndexEx Integer
+           |  AntiIndexEx Bool String
+           |  SliceEx QuasiSlice QuasiSlice
            -- |  AntiSliceExpr String
-           |  CommaExpr QuasiSlice QuasiSlice
+           |  CommaEx QuasiSlice QuasiSlice
            -- |  AntiCommaExpr String
     deriving(Show, Typeable, Data)
 
+evalBound :: Bool -> QuasiSlice -> Integer
+evalBound False NoIndexEx      = 0
+evalBound True  NoIndexEx      = -1
+evalBound _     (IndexEx i)    = i
+evalBound _     (NegIndexEx i) = -i 
+
 evalSlice :: QuasiSlice -> [IndexRange]
 evalSlice x = case x of
-    IndexExpr Nothing           -> [R 0 (-1)]
-    IndexExpr (Just i)          -> [I i]
-    SliceExpr Nothing Nothing   -> [R 0 (-1)]
-    SliceExpr Nothing (Just j)  -> [R 0 j]
-    SliceExpr (Just i) Nothing  -> [R i (-1)]
-    SliceExpr (Just i) (Just j) -> [R i j]
-    CommaExpr ex1 ex2           -> evalSlice ex1 ++ evalSlice ex2
+    NoIndexEx          -> [R 0 (-1)]
+    IndexEx i          -> [I i]
+    NegIndexEx i       -> [I (-i)]
+    SliceEx l r        -> [R (evalBound False l) (evalBound True r)]
+    CommaEx ex1 ex2    -> evalSlice ex1 ++ evalSlice ex2
 
 ------------ PARSER
 
--- todo negative numbers
-
---small   = lower <|> char '_'
---large   = upper
---idchar  = small <|> large <|> digit <|> char '\''
-
 lexeme p     = do{ x <- p; spaces; return x  }
 symbol name  = lexeme (string name)
---parens p     = between (symbol "(") (symbol ")") p
 
-comma = do{ symbol ","; return $ CommaExpr }
+comma = do{ symbol ","; return $ CommaEx }
 
 indiciesExpr :: CharParser st QuasiSlice
 indiciesExpr = sliceIndex `chainl1` comma
 
-number :: CharParser st (Maybe Integer)
-number = do 
+number :: CharParser st QuasiSlice
+number = do
   m <- optionMaybe $ symbol "-"
   ds <- many digit
-  let n = if ds == [] then Nothing else Just (read ds)
+  case (m, ds) of
+    (Nothing, []) -> try antiIntExpr <|> pure NoIndexEx
+    (Nothing, _)  -> pure $ IndexEx (read ds)
+    (Just _, [])  -> try (fmap antiNeg antiIntExpr) <|> pure NoIndexEx
+    (Just _, _)   -> pure $ IndexEx (negate $ read ds)
+  where 
+    antiNeg (AntiIndexEx _ x) = AntiIndexEx False x
+
+{-    
+    == []
+    then try anti <|> Nothing
+    else Just (read ds)
   pure $ case m of
-    Nothing -> n 
+    Nothing -> n
     _       -> fmap negate n
+-}
 
 sliceIndex :: CharParser st QuasiSlice
 sliceIndex = lexeme $ do
   l <- number
   s <- optionMaybe $ symbol ":"
-  r <- number 
-  case s of 
-    Nothing -> return $ IndexExpr l
-    Just _ -> return $ SliceExpr l r
+  r <- number
+  case s of
+    Nothing -> pure l
+    Just _ -> pure $ SliceEx l r
 
 {-
 sliceIndex :: CharParser st QuasiSlice
@@ -100,13 +111,18 @@ sliceRight = lexeme $ do{ symbol ":" ; ds <- many1 digit ; return $ SliceExpr No
 
 sliceEmpty :: CharParser st QuasiSlice
 sliceEmpty = lexeme $ do{ symbol ":"; return $ SliceExpr Nothing Nothing }
-
---ident  :: CharParser s String
---ident  =  do{ c <- small; cs <- many idchar; return (c:cs) }
 -}
 
+small   = lower <|> char '_'
+large   = upper
+idchar  = small <|> large <|> digit <|> char '\''
+
+ident  :: CharParser s String
+ident  =  do{ c <- small; cs <- many idchar; return (c:cs) }
+
 -- To include variables in scope not just integers
---antiIntExpr  = lexeme $ do{ symbol "$int:"; id <- ident; return $ AntiIntExpr id }
+antiIntExpr = lexeme $ do{ id <- ident; return $ AntiIndexEx True id }
+--antiIntExpr  = lexeme $ do{ symbol "$"; id <- ident; return $ AntiIndexEx id }
 --antiExpr     = lexeme $ do{ symbol "$"; id <- ident; return $ AntiExpr id }
 
 ---------------
