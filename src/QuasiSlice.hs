@@ -8,7 +8,6 @@ module QuasiSlice   (IndexRange(..),
                     parseSlice)
 where
 
---import Data.Generics
 import Text.ParserCombinators.Parsec
 import Data.Typeable
 import Data.Data
@@ -52,16 +51,24 @@ comma = do{ symbol ","; return $ CommaExpr }
 indiciesExpr :: CharParser st QuasiSlice
 indiciesExpr = sliceIndex `chainl1` comma
 
+number :: CharParser st (Maybe Integer)
+number = do 
+  m <- optionMaybe $ symbol "-"
+  ds <- many digit
+  let n = if ds == [] then Nothing else Just (read ds)
+  pure $ case m of
+    Nothing -> n 
+    _       -> fmap negate n
+
 sliceIndex :: CharParser st QuasiSlice
-sliceIndex = lexeme $ do 
-  d1s <- many digit
+sliceIndex = lexeme $ do
+  l <- number
   s <- optionMaybe $ symbol ":"
-  d2s <- many digit
-  let l = if d1s == [] then Nothing else Just (read d1s)
-  let r = if d2s == [] then Nothing else Just (read d2s) 
+  r <- number 
   case s of 
     Nothing -> return $ IndexExpr l
     Just _ -> return $ SliceExpr l r
+
 {-
 sliceIndex :: CharParser st QuasiSlice
 sliceIndex = sliceExpr <|> indexExpr  
@@ -97,6 +104,7 @@ sliceEmpty = lexeme $ do{ symbol ":"; return $ SliceExpr Nothing Nothing }
 --ident  :: CharParser s String
 --ident  =  do{ c <- small; cs <- many idchar; return (c:cs) }
 -}
+
 -- To include variables in scope not just integers
 --antiIntExpr  = lexeme $ do{ symbol "$int:"; id <- ident; return $ AntiIntExpr id }
 --antiExpr     = lexeme $ do{ symbol "$"; id <- ident; return $ AntiExpr id }
