@@ -17,7 +17,7 @@ code into a jupyter notebook.
 5) ./start.sh
 
 Note that the work in main is Numskull 1.0. 
-Numskull 2.0 can be found in the so-called branch! The second version is less well tested and complete, but should be more efficient since it makes use of strides. I didn't have time to integrate that into the Onnx backend, but it shouldn't be at all difficult to do so. 
+Numskull 2.0 can be found in the so-called branch! The second version is less well tested and complete, but should be more efficient since it makes use of strides. I didn't have time to integrate that into the Onnx backend, but it shouldn't be at all difficult to do so. There is an open pull request so it's easy to find.
 
 ## Development
 
