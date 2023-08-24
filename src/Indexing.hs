@@ -30,7 +30,7 @@ shape of the array, [sx,sy,sz,...], as follows:
 
 -- * INDEXING
 
--- | Generates the list of all multi-dimensional indicies for a given shape
+-- | Generates the list of all multi-dimensional indices for a given shape
 generateIndicies :: [Integer] -> [[Integer]]
 generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
 
@@ -38,8 +38,8 @@ generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
 underlying vector and the multi-dimensional index of the NdArray and back, 
 given the NdArray shape.
 -}
-mapIndicies :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
-mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
+mapIndices :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
+mapIndices sh = (M.fromList oneDkey, M.fromList twoDkey)
   where 
     twoDinds = generateIndicies sh
     oneDkey = zip [0..] twoDinds
@@ -51,7 +51,7 @@ vecInd mapp v i = v V.! (mapp M.! i)
 
 -- | Converts a shape and multi-index to a 1D index.
 collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd sh indicies = collapseRun (reverse sh) (reverse indicies) 1
+collapseInd sh indices = collapseRun (reverse sh) (reverse indices) 1
 
 -- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
@@ -102,7 +102,7 @@ value for the array e.g. 0. To avoid this use !?.
 (!?) :: forall a . DType a => NdArray -> [Integer] -> Maybe a
 (NdArray s v) !? i =
   let
-    -- Converts any negative indicies to their equivalent positives
+    -- Converts any negative indices to their equivalent positives
     positives = zipWith positiveInd s i
     flatInd = fromIntegral $ collapseInd s positives :: Int
   in
@@ -115,7 +115,7 @@ value for the array e.g. 0. To avoid this use !?.
 
 -- * SLICING
 
--- | Type which allows you to provide only a single index or a range of indicies.
+-- | Type which allows you to provide only a single index or a range of indices.
 data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 
 -- | Integrated indexing and slicing. For each dimension you can provide either a single value
@@ -124,12 +124,12 @@ data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 (#!+) (NdArray sh v) irs = sliceWithMap m 0 (map forceRange irs) (NdArray sh v)
   where (m,_) = mapIndicies sh
 
--- Converts an IndexRange to a range of indicies in the standard pair form.
+-- Converts an IndexRange to a range of indices in the standard pair form.
 forceRange :: IndexRange -> (Integer, Integer)
 forceRange (I i) = (i,i)
 forceRange (R s t) = (s,t)
 
--- Converts negative indicies to their positive equivalents, counting back
+-- Converts negative indices to their positive equivalents, counting back
 -- from the end of the array (i.e. -1 is the last element).
 positiveInd :: (Ord a, Num a) => a -> a -> a
 positiveInd s i = if i < 0 then s+i else i
