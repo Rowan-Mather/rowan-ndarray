@@ -46,8 +46,9 @@ getNumpyDType (NdArray _ v)
   | isType (typeRep @Char)     = "U1"
   | otherwise                  = error "Non-standard types cannot be serialised."
   where 
-    vectorType :: forall a . DType a => Vector a -> TypeRep a
+    vectorType :: forall a . DType a => V.Vector a -> TypeRep a
     vectorType _ = typeRep @a
+    isType :: DType a => TypeRep a -> Bool
     isType t = isJust (eqTypeRep (vectorType v) t)
 
 -- | Converts shape list to a string of the Numpy tuple form e.g. (3,2,)
