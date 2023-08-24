@@ -7,11 +7,13 @@ module Serialisation where
 
 import DType
 import NdArray
+import Typing
 
 import           Data.Int
 import           Data.List            as List
 import           Data.List.Split
 import qualified Data.Map             as M
+import           Data.Maybe           (isJust)
 import qualified Data.Vector.Storable as V
 import           Data.Word            (Word16)
 import           Foreign              (Ptr, alloca, mallocBytes)
@@ -23,16 +25,30 @@ import           Type.Reflection
 
 -- | Built in numpy serialisation descriptions
 getNumpyDType :: NdArray -> String
+{-
 getNumpyDType (NdArray _ v) = case show $ typeOf v of
   "Vector Int"      -> "<i8"
   "Vector Int64"    -> "<i8"
   "Vector Int32"    -> "<i4"
-  "Vector Integer"  -> "<i8"
   "Vector Float"    -> "<f4"
   "Vector Double"   -> "<f8"
   "Vector Bool"     -> "<?"
   "Vector Char"     -> "<U1"
   _                 -> error "Non-standard types cannot be serialised."
+-}
+getNumpyDType (NdArray _ v) 
+  | isType (typeRep @Int)      = "<i8"
+  | isType (typeRep @Int64)    = "<i8"
+  | isType (typeRep @Int32)    = "<i4"
+  | isType (typeRep @Float)    = "<f4"
+  | isType (typeRep @Double)   = "<f8"
+  | isType (typeRep @Bool)     = "<?"
+  | isType (typeRep @Char)     = "U1"
+  | otherwise                  = error "Non-standard types cannot be serialised."
+  where 
+    vectorType :: forall a . DType a => Vector a -> TypeRep a
+    vectorType _ = typeRep @a
+    isType t = isJust (eqTypeRep (vectorType v) t)
 
 -- | Converts shape list to a string of the Numpy tuple form e.g. (3,2,)
 getNumpyShape :: NdArray -> String
@@ -116,7 +132,6 @@ reifyDType :: String -> (forall a . DType a => TypeRep a -> r) -> r
 reifyDType dtype cont =
   case dtype of
     "<i8" -> cont (typeRep @Int64)
-    "<i8" -> cont (typeRep @Int)
     "<i4" -> cont (typeRep @Int32)
     "<f4" -> cont (typeRep @Float)
     "<f8" -> cont (typeRep @Double)
