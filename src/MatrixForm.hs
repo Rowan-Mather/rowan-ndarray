@@ -46,7 +46,7 @@ printArray nd = putStr $ prettyShowArray nd
 
 -- | Converts an NdArray to its pretty representation.
 -- Values along a row are separated whitespace. Along a column, newlines.
--- For higher dimensions, an additional newline is added to separate the nxm matricies. 
+-- For higher dimensions, an additional newline is added to separate the nxm matrices. 
 prettyShowArray :: NdArray -> String
 prettyShowArray (NdArray s v) = conc <> "\n"
   where

@@ -624,7 +624,7 @@ broadcast (NdArray s v, NdArray r u) =
       Just ns -> Just (
         NdArray ns $ padRepeats ns m s' v',
         NdArray ns $ padRepeats ns m r' u')
-        where m = fst $ mapIndicies ns
+        where m = fst $ mapIndices ns
 
 -- Pads out dimensions for broadcasting if one array is dimensionally smaller than another.
 -- e.g. [1,2,3] and [3].
@@ -652,7 +652,7 @@ broadcastDimensions s v r u
 padRepeats :: DType a =>
   [Integer] -> M.Map Int [Integer] -> [Integer] -> Vector a -> Vector a
 padRepeats newshape oneDmap s v =
-  let (_, multiMap) = mapIndicies s
+  let (_, multiMap) = mapIndices s
   in V.generate (fromIntegral $ product newshape) (\i ->
     let
         multiI = oneDmap M.! i -- equivalent multi-index
@@ -686,8 +686,8 @@ concatAlongVec vs shs axis =
       -- Each array to be concatenated is given a number to index it with
       -- Values are indexed by array number, then by position in the array
       arrayPlot = concat $ zipWith (\arr dim -> [(arr, x) | x <- [0..dim-1]]) [0..] axDim
-      (newMultiInds, _) = mapIndicies newshape
-      subArrayMaps = map (snd . mapIndicies) shs
+      (newMultiInds, _) = mapIndices newshape
+      subArrayMaps = map (snd . mapIndices) shs
     in
       Just (newshape,
         V.generate (length newMultiInds) (\i ->
@@ -728,7 +728,7 @@ checkAxis axis shapes =
 axisDimensions :: Int -> [[Integer]] -> [Integer]
 axisDimensions axis = map (!! axis)
 
--- | Takes an array, set of sub-indicies and axis and repeatedly takes slices
+-- | Takes an array, set of sub-indices and axis and repeatedly takes slices
 -- of the array restricted to that index along the specified axis.
 -- The slices are then concatenated into the final array.
 gather :: NdArray -> [Integer] -> Integer -> NdArray
@@ -742,8 +742,8 @@ gather nd is axis = fromJust $ concatAlong ax (map (\i -> slice (sliceLead ++ [(
 
 -- * Rows, Columns and Diagonals
 
-{- | Switches the rows at the two given indicies over.
-NB: designed for 2x2 matricies so will only make swaps in the 'front' matrix of a tensor.
+{- | Switches the rows at the two given indices over.
+NB: designed for 2x2 matrices so will only make swaps in the 'front' matrix of a tensor.
 -}
 swapRows :: Integer -> Integer -> NdArray -> NdArray
 swapRows r1 r2 (NdArray s v)
@@ -792,8 +792,8 @@ transposePerm perm (NdArray sh v) =
   let
     sh' = permuteList perm sh
     perm' = invertPermutation perm
-    (_, toV) = mapIndicies sh
-    (fromU, _) = mapIndicies sh'
+    (_, toV) = mapIndices sh
+    (fromU, _) = mapIndices sh'
     sz = V.length v
   in NdArray sh' $ V.generate sz (\i ->
       let
@@ -813,7 +813,7 @@ invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm
 
 -- * Multiplication
 
--- | Dot product over matricies of the same shape.
+-- | Dot product over matrices of the same shape.
 dot :: DType a => NdArray -> NdArray -> a
 dot nd1 nd2 = foldrA DType.add DType.addId (nd1*nd2)
 
@@ -855,10 +855,10 @@ matMulVec :: forall a . DType a =>
   [Integer] -> Vector a -> [Integer] -> Vector a -> Vector a
 matMulVec s v r u =
   let
-    oneDkey = fst $ mapIndicies [s!!0, r!!1]
+    oneDkey = fst $ mapIndices [s!!0, r!!1]
     sz = M.size oneDkey
-    map1 = vecInd (snd $ mapIndicies s) v
-    map2 = vecInd (snd $ mapIndicies r) u
+    map1 = vecInd (snd $ mapIndices s) v
+    map2 = vecInd (snd $ mapIndices r) u
     ks = [0 .. (s!!1 -1)]
   in
     V.generate sz (matMulElem map1 map2 ks . (M.!) oneDkey)
@@ -878,7 +878,7 @@ Will attempt to broadcast the shape of C and convert the types of alpha & beta.
 
 For more information see:
 https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3
-NB: if the matricies are integers the scalars will also become integers so you should convert the matricies first
+NB: if the matrices are integers the scalars will also become integers so you should convert the matrices first
 -}
 gemm :: (DType a, DType b) =>
   NdArray -> NdArray -> NdArray -> Bool -> Bool -> a -> b -> Maybe NdArray
@@ -928,7 +928,7 @@ gemmTyping vA vB vC alpha beta =
     Just HRefl ->
       case vA =@= vC of
         Just HRefl ->
-          -- All matricies match types
+          -- All matrices match types
           let
             vA' = vA :: Vector a
             vB' = vB :: Vector a
@@ -955,7 +955,7 @@ upperTriangle :: NdArray -> NdArray
 upperTriangle (NdArray [] v) = NdArray [] v
 upperTriangle (NdArray (c:rs) v) =
   let
-    (_, fromMulti) = mapIndicies (c:rs)
+    (_, fromMulti) = mapIndices (c:rs)
     traversals = [(i,j,k) | i <- [0..c-1], j <- [i+1..c-1], k <- [0..c-1]]
   in
     NdArray (c:rs) $ triangulateVec fromMulti v traversals (identityElem v)
@@ -972,7 +972,7 @@ triangulateVec m v ((i,j,k) : trv) r =
   in
     triangulateVec m (v V.// [(jk, newVjk)]) trv ratio
 
-{- | Finds the determinant(s) of a tensor. Over matricies of more than two dimensions
+{- | Finds the determinant(s) of a tensor. Over matrices of more than two dimensions
 each 2D matrix's determinant is individually calculated and concatenated together (as in numpy:
 https://numpy.org/doc/stable/reference/generated/numpy.linalg.det.html ).
 If the matrix is non-square it is assumed to be padded out and will have determinant of 0
@@ -996,9 +996,9 @@ https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/M
 determinant2D :: forall a . DType a => NdArray -> a
 determinant2D nd =
   case shape nd of
-    -- 2x2 matricies are calculated quickly with the standard ad-bc
+    -- 2x2 matrices are calculated quickly with the standard ad-bc
     [2,2] -> determinant2x2 nd
-    -- nxn matricies are row-swapped to find an arrangement with no zeros/identity elements
+    -- nxn matrices are row-swapped to find an arrangement with no zeros/identity elements
     -- in the leading diagonal (pivots) then put into upper triangle form
     [c,r] | c == r && not (zeroRow nd) -> case swapRowsWith0Pivot nd of
             Just (NdArray s v) ->
