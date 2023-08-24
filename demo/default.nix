@@ -6,5 +6,5 @@ let
     path = import (./. + "/${folder}");
   });
 in nixpkgs.linkFarm "notebooks" (notebooks [
-  "codensity",
+  "Rowan-Presentation"
 ])
