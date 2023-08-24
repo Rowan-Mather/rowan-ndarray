@@ -35,10 +35,9 @@ test-suite test
                     , hspec 
                     , QuickCheck
                     , numskull
-  --ghc-options:        -Wall
-  --                   -Wno-unused-top-binds
-  ghc-options:        -Wno-unused-top-binds
-  default-language:    Haskell2010
+
+  ghc-options:      -Wall
+  default-language: Haskell2010
 
 test-suite doctest
   import library-deps
