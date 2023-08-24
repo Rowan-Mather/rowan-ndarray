@@ -25,17 +25,6 @@ import           Type.Reflection
 
 -- | Built in numpy serialisation descriptions
 getNumpyDType :: NdArray -> String
-{-
-getNumpyDType (NdArray _ v) = case show $ typeOf v of
-  "Vector Int"      -> "<i8"
-  "Vector Int64"    -> "<i8"
-  "Vector Int32"    -> "<i4"
-  "Vector Float"    -> "<f4"
-  "Vector Double"   -> "<f8"
-  "Vector Bool"     -> "<?"
-  "Vector Char"     -> "<U1"
-  _                 -> error "Non-standard types cannot be serialised."
--}
 getNumpyDType (NdArray _ v) 
   | isType (typeRep @Int)      = "<i8"
   | isType (typeRep @Int64)    = "<i8"
