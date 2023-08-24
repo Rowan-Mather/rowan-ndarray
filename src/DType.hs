@@ -9,20 +9,30 @@ import GHC.Float (float2Double)
 import Data.Int
 import Data.Char
 
--- Basis for all pointwise operations
+-- | All types storable within an NdArray must implement DType. 
+-- This defines some basic properties, mathematical operations and standards for conversion.
 class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
+  -- | Additive identity 
   addId :: a
+  -- | Multiplicative identity
   multId :: a
-  -- Numeric
+  -- | Standard numeric operations
+  -- NB: 
+  -- divide preserves DType
+  -- div is specifically for integer division and returns an Int
+  -- pow preserves DType
+  -- power is for precision and uses Doubles
+  -- mod returns an Int
   add :: a -> a -> a
   subtract :: a -> a -> a
   multiply :: a -> a -> a
   divide :: a -> a -> a
-  div :: a -> a -> Integer
+  div :: a -> a -> Int
   power :: a -> Double -> Double
   pow :: a -> a -> a
+  -- Log base x of y
   log :: a -> a -> a
-  mod :: a -> a -> Integer
+  mod :: a -> a -> Int
   abs :: a -> a
   signum :: a -> a
   ceil :: a -> a
@@ -31,11 +41,12 @@ class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
   sin :: a -> a
   cos :: a -> a
   tan :: a -> a
-  -- Logical 
+  -- | Most logical operations are simply defined in the numeric section on Booleans.
+  -- Invert is naturally defined as -x numerically and NOT x logically.
   invert :: a -> a
   shiftleft :: a -> a
   shiftright :: a -> a
-  -- Casting
+  -- | Dtypes are converted between via the intermediate type of rational
   dtypeToRational :: a -> Rational
   rationalToDtype :: Rational -> a
 
@@ -46,14 +57,14 @@ instance DType Int where
   add x y = x + y 
   subtract x y = x - y
   multiply x y = x * y
-  divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  divide = P.div
+  div x y = (fromIntegral $ P.div x y) :: Int
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int
     where xd = fromIntegral @Int @Double x
           yd = fromIntegral @Int @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod = P.mod
   abs = P.abs
   signum = P.signum
   ceil x = x
@@ -66,14 +77,13 @@ instance DType Int where
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
-  -- (Conversions)
+  -- Conversion
   dtypeToRational = toRational
   rationalToDtype = P.floor . fromRational @Double
 
 roundIntFunc :: (Float -> Float) -> Int -> Int
 roundIntFunc f x = (round $ f $ fromIntegral @Int @Float x) :: Int
 
--- Entirely copied really
 instance DType Int32 where 
   addId = 0
   multId = 1
@@ -81,27 +91,27 @@ instance DType Int32 where
   add x y = x + y 
   subtract x y = x - y
   multiply x y = x * y
-  divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  divide = P.div 
+  div x y = fromIntegral @Int32 @Int $ P.div x y
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int32
     where xd = fromIntegral @Int32 @Double x
           yd = fromIntegral @Int32 @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod x y = fromIntegral @Int32 @Int $ P.mod x y
   abs = P.abs
   signum = P.signum
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ fromIntegral x) :: Int32
-  cos x = (round $ P.sin $ fromIntegral x) :: Int32
-  tan x = (round $ P.sin $ fromIntegral x) :: Int32
+  sin x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
+  cos x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
+  tan x = (round $ P.sin $ fromIntegral @Int32 @Float x) :: Int32
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
-  -- (Conversions)
+  -- Conversion
   dtypeToRational = toRational
   rationalToDtype = P.floor . fromRational @Double
 
@@ -112,27 +122,27 @@ instance DType Int64 where
   add x y = x + y 
   subtract x y = x - y
   multiply x y = x * y
-  divide x y = P.div x y
-  div x y = (fromIntegral $ P.div x y) :: Integer
+  divide = P.div
+  div x y = fromIntegral @Int64 @Int $ P.div x y
   power x d = fromIntegral x ** d
   pow x y = x ^ y
   log x y = (P.floor $ logBase xd yd) :: Int64
     where xd = fromIntegral @Int64 @Double x
           yd = fromIntegral @Int64 @Double y
-  mod x y = fromIntegral (x `P.mod` y) :: Integer
+  mod x y = fromIntegral @Int64 @Int $ P.mod x y
   abs = P.abs
   signum = P.signum
   ceil x = x
   floor x = x
   -- Trig
-  sin x = (round $ P.sin $ fromIntegral x) :: Int64
-  cos x = (round $ P.sin $ fromIntegral x) :: Int64
-  tan x = (round $ P.sin $ fromIntegral x) :: Int64
+  sin x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
+  cos x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
+  tan x = (round $ P.sin $ fromIntegral @Int64 @Float x) :: Int64
   -- Logical 
   invert x = -x
   shiftleft x = x * 2
   shiftright x = x `P.div` 2
-  -- (Conversions)
+  -- Conversion
   dtypeToRational = toRational
   rationalToDtype = P.floor . fromRational @Double
 
@@ -147,9 +157,8 @@ instance DType Float where
   div x y = P.floor x `P.div` P.floor y
   power x d = float2Double x ** d
   pow x y = x ** y
-  log x y = logBase x y
-  mod x y = fromIntegral (xi `P.mod` yi):: Integer
-    where xi = P.floor x; yi = P.floor y
+  log = logBase
+  mod x y = P.floor x `P.mod` P.floor y
   abs = P.abs
   signum = P.signum
   ceil = fromIntegral @Integer @Float . P.ceiling
@@ -177,9 +186,8 @@ instance DType Double where
   div x y = P.floor x `P.div` P.floor y
   power x d = x ** d
   pow x y = x ** y
-  log x y = logBase x y
-  mod x y = fromIntegral (xi `P.mod` yi):: Integer
-    where xi = P.floor x; yi = P.floor y
+  log = logBase
+  mod x y = P.floor x `P.mod` P.floor y
   abs = P.abs
   signum = P.signum
   ceil = fromIntegral @Integer @Double . P.ceiling
@@ -196,23 +204,30 @@ instance DType Double where
   dtypeToRational = toRational
   rationalToDtype = fromRational @Double
 
-instance DType Bool where 
+instance DType Bool where
   addId = False
   multId = True
-    -- Numeric
+  -- | Logical OR
   add x y = x || y
-  subtract x y = (x || y) && not (x && y)
+  -- | Logical NOR
+  subtract x y = not (x || y)
+  -- | Logical AND
   multiply x y = x && y
+  -- | Logical NAND
   divide x y = not (x && y)
-  div x y = 0
-  power _x _d = undefined
-  pow x y = toEnum (fromEnum x ^ fromEnum y)
-  log _x _y = undefined
-  mod x y = fromIntegral (fromEnum x `P.mod` fromEnum y) :: Integer
+  div x y = fromEnum $ DType.divide x y
+  -- | Numeric power
+  power x d = fromIntegral (fromEnum x) ** d
+  -- | Logical reverse implication
+  pow x y = not y || x
+  -- | Logical implication
+  log x y = not x || y
+  -- | Logical XOR, but Int result
+  mod x y = fromEnum $ (x || y) && not (x && y)
   abs _ = True
   signum = id
   ceil = id
-  floor = id
+  floor = id 
   -- Trig (False = 0, True = 1 or /=0)
   sin False = False
   sin True = True
@@ -221,7 +236,8 @@ instance DType Bool where
   tan False = False
   tan True = True
   -- Logical 
-  invert x = not x
+  -- Logical NOT
+  invert = not
   shiftleft _ = False
   shiftright _ = False
   -- Conversions
@@ -236,16 +252,19 @@ instance DType Char where
   -- Numeric
   add x y = chr $ ord x + ord y
   subtract x y = chr $ min 0 $ ord x + ord y
-  multiply x y = undefined
-  divide x y = undefined
-  div x y = undefined
-  power x d = undefined
-  pow x y = undefined
-  log x y = undefined
-  mod x y = undefined
+  multiply _ _ = undefined
+  divide _ _ = undefined
+  div _ _ = undefined
+  power _ _ = undefined
+  pow _ _ = undefined
+  log _ _ = undefined
+  mod _ _ = undefined
   abs = undefined
-  signum c = if isAlpha c then if isUpper c then 'A' else 'a'
-             else if isDigit c then '0' else c
+  signum c
+    | isUpper c = 'A' 
+    | isLower c = 'a'
+    | isDigit c = '0'
+    | otherwise = c
   ceil = toUpper
   floor = toLower
   -- Trig
@@ -259,7 +278,3 @@ instance DType Char where
   -- Conversion
   dtypeToRational = toRational . ord
   rationalToDtype = chr . P.floor. fromRational @Double
-
---instance ByteString where?
-
---instance DType BFloat16 where?
