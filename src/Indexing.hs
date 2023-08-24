@@ -36,7 +36,7 @@ shape of the array, [sx,sy,sz,...], as follows:
 
 -- * INDEXING
 
--- | Generates the list of all multi-dimensional indicies for a given shape
+-- | Generates the list of all multi-dimensional indices for a given shape
 generateIndicies :: [Integer] -> [[Integer]]
 generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
 
@@ -44,8 +44,8 @@ generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
 underlying vector and the multi-dimensional index of the NdArray and back, 
 given the NdArray shape.
 -}
-mapIndicies :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
-mapIndicies sh = (M.fromList oneDkey, M.fromList twoDkey)
+mapIndices :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
+mapIndices sh = (M.fromList oneDkey, M.fromList twoDkey)
   where 
     twoDinds = generateIndicies sh
     oneDkey = zip [0..] twoDinds
@@ -57,7 +57,7 @@ vecInd mapp v i = v V.! (mapp M.! i)
 
 -- | Converts a shape and multi-index to a 1D index.
 collapseInd :: [Integer] -> [Integer] -> Integer
-collapseInd sh indicies = collapseRun (reverse sh) (reverse indicies) 1
+collapseInd sh indices = collapseRun (reverse sh) (reverse indices) 1
 
 -- Helper for collapseInd
 collapseRun :: [Integer] -> [Integer] -> Integer -> Integer
@@ -108,7 +108,7 @@ value for the array e.g. 0. To avoid this use !?.
 (#?) :: forall a . DType a => NdArray -> [Integer] -> Maybe a
 (NdArray s v) #? i =
   let
-    -- Converts any negative indicies to their equivalent positives
+    -- Converts any negative indices to their equivalent positives
     positives = zipWith positiveInd s i
     flatInd = fromIntegral $ collapseInd s positives :: Int
   in
@@ -126,20 +126,8 @@ positiveInd s i = if i < 0 then s+i else i
 
 -- * SLICING
 
-{- | Takes a series of ranges corresponding to each dimension in the array and returns
-the sub-array. Indicies are (inclusive, exclusive) but can be negative. -}
-slice :: [(Integer, Integer)] -> NdArray -> NdArray
-slice ss (NdArray sh v) = sliceWithMap m 0 (positiveRanges sh ss) (NdArray sh v)
-  where (m,_) = mapIndicies sh
-
 positiveRanges :: [Integer] -> [(Integer, Integer)] -> [(Integer, Integer)]
 positiveRanges = zipWith (\s (x,y) -> (positiveInd s x, if y < 0 then s+y else y-1))
-
--- Integrated indexing and slicing. For each dimension you can provide either a single value
--- or a range of values where a slice will be taken.
-(#!+) :: NdArray -> [IndexRange] -> NdArray
-(#!+) (NdArray sh v) irs = sliceWithMap m 0 (zipWith forceRange sh irs) (NdArray sh v)
-  where (m,_) = mapIndicies sh
 
 -- Converts an IndexRange to a range of indicies in the standard pair form.
 forceRange :: Integer -> IndexRange -> (Integer, Integer)
@@ -152,10 +140,35 @@ forceRange sh (R s t) = (positiveInd sh s, if t < 0 then positiveInd sh t else t
 (/!) :: NdArray -> QuasiSlice -> NdArray
 (/!) nd sl = nd #!+ (evalSlice sl)
 
+-- Integrated indexing and slicing. For each dimension you can provide either a single value
+-- or a range of values where a slice will be taken.
+(#!+) :: NdArray -> [IndexRange] -> NdArray
+(#!+) nd irs = slice (map forceRange irs) nd
+--(#!+) (NdArray sh v) irs = sliceWithMap m 0 (map forceRange irs) (NdArray sh v)
+--  where (m,_) = mapIndices sh
+
+{- | Takes a series of ranges corresponding to each dimension in the array and returns
+the sub-array. Indicies are inclusive and can be negative. -}
+slice :: [(Integer, Integer)] -> NdArray -> NdArray
+slice sl (NdArray s v) =
+  let
+    sl' = zipWith (\(x,y) sk -> (positiveInd sk x, positiveInd sk y)) sl s
+    inds = sequence $ map (\(x, y) -> [x..y]) sl'
+    flatinds = V.fromList $ map (fromInteger @Int . collapseInd s) inds
+    newshape = map (\(x,y) -> y-x+1) sl'
+  in NdArray newshape $ V.map (v V.!) flatinds
+
+{- | Takes a series of ranges corresponding to each dimension in the array and returns
+the sub-array. Indicies are inclusive and can be negative. -}
+--slice :: [(Integer, Integer)] -> NdArray -> NdArray
+--slice ss (NdArray sh v) = sliceWithMap m 0 ss (NdArray sh v)
+--  where (m,_) = mapIndices sh
+
 -- | Equivalent slicing operator.
 --(!/) :: NdArray -> [(Integer, Integer)] -> NdArray
 --(!/) nd ss = slice ss nd
 
+{-
 -- Takes a slice on an NdArray given the mapping from the vector index to NdArray index.
 -- Iterates through each dimension of the slice one at a time. 
 sliceWithMap :: M.Map Int [Integer] -> Int -> [(Integer, Integer)] -> NdArray -> NdArray
@@ -186,3 +199,4 @@ shrinkNth _ _ [] = []
 shrinkNth n newVal (x:xs)
   | n == 0 = if newVal < x then newVal:xs else x:xs
   | otherwise = x:shrinkNth (n-1) newVal xs
+-}

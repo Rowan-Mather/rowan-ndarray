@@ -1,5 +1,20 @@
 # rowan-numskull
 
+## Using Numskull
+
+This is a Summer Internship project from 2023. Numskull is a NumPy-like library for Haskell, featuring NdArrays which can be created and manipulated to store many different types (of the DType class). 
+
+Numskull was designed for purposes of integration here into the onnx-graph backend:
+https://github.com/MyrtleSoftware/myrtlepkgs/tree/rowan-onnx/pkgs/onnx-graph/src/OnnxGraph
+But it can be used anywhere you need to operate on arrays of unspecified type and shape.
+
+For more information and a demo, have a look at my talk: 
+https://myrtlesoft.atlassian.net/wiki/spaces/COM/pages/2602860561/Talks+Training
+The slides can also be found in this repo.
+
+Note that the work in main is Numskull 1.0. 
+Numskull 2.0 can be found in the so-called branch! The second version is less well tested and complete, but should be more efficient since it makes use of strides. I didn't have time to integrate that into the Onnx backend, but it shouldn't be at all difficult to do so. 
+
 ## Development
 
 ### Using Cabal
