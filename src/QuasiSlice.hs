@@ -12,7 +12,7 @@ import Text.ParserCombinators.Parsec
 import Data.Typeable
 import Data.Data
 
--- | Type which allows you to provide only a single index or a range of indicies.
+-- | Type which allows you to provide only a single index or a range of indices.
 data IndexRange = I Integer | R Integer Integer deriving (Show, Eq)
 
 -- QuasiQuoted slices are converted to this to be evaluated.
@@ -48,8 +48,8 @@ symbol name  = lexeme (string name)
 
 comma = do{ symbol ","; return $ CommaEx }
 
-indiciesExpr :: CharParser st QuasiSlice
-indiciesExpr = sliceIndex `chainl1` comma
+indicesExpr :: CharParser st QuasiSlice
+indicesExpr = sliceIndex `chainl1` comma
 
 number :: CharParser st QuasiSlice
 number = do
@@ -96,6 +96,6 @@ parseSlice (file, line, col) s =
               (flip setSourceColumn) col $
               pos
             spaces
-            e <- indiciesExpr
+            e <- indicesExpr
             eof
             return e

@@ -829,7 +829,7 @@ invertPermutation perm = map (\i -> fromJust $ elemIndex i perm) [0..length perm
 
 -- * Multiplication
 
--- | Dot product over matricies of the same shape.
+-- | Dot product over matrices of the same shape.
 dot :: forall a. DType a => NdArray -> NdArray -> a
 dot (NdArray s v) nd2 = foldrA DType.add (identityElem v <-@ typeRep @a) ((NdArray s v)*nd2)
 
@@ -1012,9 +1012,9 @@ https://informatika.stei.itb.ac.id/~rinaldi.munir/Matdis/2016-2017/Makalah2016/M
 determinant2D :: forall a . DType a => NdArray -> a
 determinant2D nd =
   case shape nd of
-    -- 2x2 matricies are calculated quickly with the standard ad-bc
+    -- 2x2 matrices are calculated quickly with the standard ad-bc
     [2,2] -> determinant2x2 nd :: a
-    -- nxn matricies are row-swapped to find an arrangement with no zeros/identity elements
+    -- nxn matrices are row-swapped to find an arrangement with no zeros/identity elements
     -- in the leading diagonal (pivots) then put into upper triangle form
     [c,r] | c == r && not (zeroRow nd) -> case swapRowsWith0Pivot nd of
             Just (NdArray s v) ->

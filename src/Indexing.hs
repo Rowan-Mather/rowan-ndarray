@@ -37,8 +37,8 @@ shape of the array, [sx,sy,sz,...], as follows:
 -- * INDEXING
 
 -- | Generates the list of all multi-dimensional indices for a given shape
-generateIndicies :: [Integer] -> [[Integer]]
-generateIndicies = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
+generateIndices :: [Integer] -> [[Integer]]
+generateIndices = foldr (\x xs -> [ i:t | i <- [0..(x-1)], t <- xs]) [[]]
 
 {- | Generates two maps to convert between the single dimension index of the 
 underlying vector and the multi-dimensional index of the NdArray and back, 
@@ -47,7 +47,7 @@ given the NdArray shape.
 mapIndices :: [Integer] -> (M.Map Int [Integer], M.Map [Integer] Int)
 mapIndices sh = (M.fromList oneDkey, M.fromList twoDkey)
   where 
-    twoDinds = generateIndicies sh
+    twoDinds = generateIndices sh
     oneDkey = zip [0..] twoDinds
     twoDkey = zip twoDinds [0..]
 
@@ -85,7 +85,7 @@ validIndex (NdArray s _) i = (length i == length s) && and (zipWith lessAbs i s)
   where lessAbs x y = (0 <= x && x < y) || (0 < -x && -x <= y)
 
 {- | Takes a multi-dimensional index and returns the value in the NdArray at that position.
-Indicies can be negative, where -1 is the row in that dimension.
+Indices can be negative, where -1 is the row in that dimension.
 If an index exceeds the size of its dimension, a value will still be returned, the identity
 value for the array e.g. 0. To avoid this use !?.
 -} 
@@ -119,7 +119,7 @@ value for the array e.g. 0. To avoid this use !?.
         Nothing -> Nothing
     else Nothing
 
--- Converts negative indicies to their positive equivalents, counting back
+-- Converts negative indices to their positive equivalents, counting back
 -- from the end of the array (i.e. -1 is the last element).
 positiveInd :: (Ord a, Num a) => a -> a -> a
 positiveInd s i = if i < 0 then s+i else i
@@ -129,7 +129,7 @@ positiveInd s i = if i < 0 then s+i else i
 positiveRanges :: [Integer] -> [(Integer, Integer)] -> [(Integer, Integer)]
 positiveRanges = zipWith (\s (x,y) -> (positiveInd s x, if y < 0 then s+y else y-1))
 
--- Converts an IndexRange to a range of indicies in the standard pair form.
+-- Converts an IndexRange to a range of indices in the standard pair form.
 forceRange :: Integer -> IndexRange -> (Integer, Integer)
 forceRange sh (I i) = (positiveInd sh i, positiveInd sh i)
 forceRange sh (R s t) = (positiveInd sh s, if t < 0 then positiveInd sh t else t-1)
@@ -146,7 +146,7 @@ forceRange sh (R s t) = (positiveInd sh s, if t < 0 then positiveInd sh t else t
 (#!+) (NdArray s v) irs = slice (zipWith forceRange s irs) (NdArray s v)
 
 {- | Takes a series of ranges corresponding to each dimension in the array and returns
-the sub-array. Indicies are inclusive and can be negative. -}
+the sub-array. Indices are inclusive and can be negative. -}
 slice :: [(Integer, Integer)] -> NdArray -> NdArray
 slice sl (NdArray s v) =
   let
