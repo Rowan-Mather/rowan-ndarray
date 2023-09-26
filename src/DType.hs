@@ -8,10 +8,11 @@ import Type.Reflection
 import GHC.Float (float2Double)
 import Data.Int
 import Data.Char
+import Control.DeepSeq (NFData)
 
 -- | All types storable within an NdArray must implement DType. 
 -- This defines some basic properties, mathematical operations and standards for conversion.
-class (Typeable a, Storable a, Show a, Eq a, Ord a) => DType a where
+class (Typeable a, Storable a, Show a, Eq a, Ord a, NFData a) => DType a where
   -- | Additive identity 
   addId :: a
   -- | Multiplicative identity
