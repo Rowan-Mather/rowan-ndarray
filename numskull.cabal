@@ -13,7 +13,6 @@ build-type:         Simple
 -- extra-source-files:
 
 library
-    import library-deps
     exposed-modules:    Numskull
                       , NdArray
                       , NdArrayException
