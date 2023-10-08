@@ -25,6 +25,14 @@ Numskull 2.0 can be found in the so-called branch! The second version is less we
 
 This builds like any Cabal project with `cabal build`, `cabal repl`, etc.
 
+#### Benchmark
+
+Run the benchmark with
+
+```sh
+$ cabal run bench
+```
+
 ### Using Nix (and Cabal)
 
 There is a `default.nix` so the project can be built with `nix-build`, and a
