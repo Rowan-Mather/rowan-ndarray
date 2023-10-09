@@ -41,8 +41,8 @@ There is a `default.nix` so the project can be built with `nix-build`, and a
 #### Niv
 
 Dependencies are maintained using `niv` in `nix/sources.json`.
-Source repositories specified in `cabal.project` should be kept up to date with
-`nix/sources.json`.
+If any source repositories are specified in `cabal.project`, they should be
+kept up to date with the sources specified in `nix/sources.json`.
 
 #### cabal2nix
 
