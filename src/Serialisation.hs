@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Serialisation where
-
+{-
 import DType
 import NdArray
 import Typing
@@ -145,3 +145,4 @@ loadNpy path = withBinaryFile path ReadMode $ \h -> do
     -- Calculates the total number of elements in the array
   -- Reads the array itself into a list
   reifyDType dtype (loadPayload h sh)
+-}
