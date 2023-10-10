@@ -843,7 +843,7 @@ matMul (NdArray s v) (NdArray r u) =
     Just HRefl ->
       case (reverse s, reverse r) of
         -- Standard matrix multiplication
-        ([m, n], [o, p]) | m == p -> NdArray [n,o] (matMulVec s v r u)
+        ([m, n], [o, p]) | m == p -> NdArray [n,o] (matMulVec' (fromIntegral n) (fromIntegral m) (fromIntegral o) v u)
         -- 1D arrays have the extra dimension pre/appended then result collapses back to 1D
         ([m], [o, p])   | m == p -> NdArray [o] (matMulVec [1,m] v r u)
         ([m, n], [p])   | m == p -> NdArray [n] (matMulVec s v [p,1] u)
@@ -878,6 +878,16 @@ matMulVec s v r u =
     ks = [0 .. (s!!1 -1)]
   in
     V.generate sz (matMulElem map1 map2 ks . (M.!) oneDkey)
+
+-- Multiplies an mxn matrix by a nxp matrix.
+matMulVec' :: forall a . DType a =>
+  Int -> Int -> Int -> Vector a -> Vector a -> Vector a
+matMulVec' m n p u v =
+  V.generate (m*p) $ \idx ->
+    let (i, j) = idx `divMod` p
+        dot' :: V.Vector a -> V.Vector a -> a
+        dot' u' v' = V.foldl' DType.add DType.addId (V.zipWith DType.multiply u' v')
+    in V.slice (i*n) n u `dot'` V.generate n (\k -> v V.! (k*p+j))
 
 -- Calculates the element at position [i,j] in the resultant nxp matrix of a matMul
 matMulElem :: forall a . DType a =>
