@@ -33,6 +33,11 @@ Run the benchmark with
 $ cabal run bench
 ```
 
+The benchmark depends on the `hmatrix` library, which depends on the blas and
+lapack non-Haskell libraries, so you may need to install these to your system
+first (they may be called e.g. `libblas-dev` or `liblapack-dev` in your package
+manager).
+
 ### Using Nix (and Cabal)
 
 There is a `default.nix` so the project can be built with `nix-build`, and a
